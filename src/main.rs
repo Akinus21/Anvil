@@ -68,6 +68,7 @@ fn main() {
         Some("search-mods") => repos::execute(&config_dir, vec!["search-mods".to_string()].into_iter().chain(args.args.clone()).collect()),
         Some("install-mods") => repos::execute(&config_dir, vec!["install-mods".to_string()].into_iter().chain(args.args.clone()).collect()),
         Some("add-mod") => repos::execute(&config_dir, vec!["add-mod".to_string()].into_iter().chain(args.args.clone()).collect()),
+        Some("update-mod") => repos::execute(&config_dir, vec!["update-mod".to_string()].into_iter().chain(args.args.clone()).collect()),
         Some("autoupdate") => autoupdate::execute(&config_dir, args.args.clone()),
         Some("upgrade") | Some("self-upgrade") | Some("upgrade-aktools") | Some("selfupgrade") => upgrade::execute(&config_dir, args.args.clone()),
         Some("build-command") => build_command::execute(&modules_dir, &registry_path),
