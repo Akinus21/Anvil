@@ -42,7 +42,7 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
 }
 
 fn generate_bash_completion() -> String {
-    let commands = "run add edit rm list update doctor help build-command edit_aliases completion add-repo list-repos search-mods install-mods add-mod inspect-mod autoupdate upgrade";
+    let commands = "run add edit rm list update doctor help build-command edit_aliases completion add-repo list-repos search-mods install-mods add-mod update-mod inspect-mod autoupdate upgrade";
     format!(r#"# aktools bash completion
 
 _aktools() {{
@@ -70,7 +70,7 @@ complete -F _aktools aktools
 }
 
 fn generate_zsh_completion() -> String {
-    let commands_list = ["run", "add", "edit", "rm", "list", "update", "doctor", "help", "build-command", "edit_aliases", "completion", "add-repo", "list-repos", "search-mods", "search-mod", "mod-search", "install-mods", "install-mod", "mod-install", "add-mod", "inspect-mod", "autoupdate", "upgrade"];
+    let commands_list = ["run", "add", "edit", "rm", "list", "update", "doctor", "help", "build-command", "edit_aliases", "completion", "add-repo", "list-repos", "search-mods", "search-mod", "mod-search", "install-mods", "install-mod", "mod-install", "add-mod", "update-mod", "inspect-mod", "autoupdate", "upgrade"];
     let commands = commands_list.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(" ");
     let upgrade_targets = "'aktools' 'modules' 'all'";
     format!(r#"# aktools zsh completion
@@ -125,6 +125,7 @@ complete -c aktools -f -a 'list-repos' -d 'List repos'
 complete -c aktools -f -a 'search-mods' -d 'Search modules (alias: search-mod, mod-search)'
 complete -c aktools -f -a 'install-mods' -d 'Install modules (alias: install-mod, mod-install)'
 complete -c aktools -f -a 'add-mod' -d 'Submit module to repo'
+complete -c aktools -f -a 'update-mod' -d 'Update module in repo (owner only)'
 complete -c aktools -f -a 'inspect-mod' -d 'Show module contents'
 complete -c aktools -f -a 'autoupdate' -d 'Manage autoupdate'
 complete -c aktools -f -a 'upgrade' -d 'Upgrade aktools and/or modules'

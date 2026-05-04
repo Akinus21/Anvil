@@ -48,6 +48,7 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
         "search-mods" | "search-mod" | "mod-search" => search_modules(&repos_file, &remaining_args),
         "install-mods" | "install-mod" | "mod-install" => install_modules(&repos_file, &module_dir, config_dir, &remaining_args),
         "add-mod" => add_mod(&repos_file, &module_dir, config_dir, &remaining_args),
+        "update-mod" => update_mod(&repos_file, &module_dir, config_dir, &remaining_args),
         "inspect-mod" => inspect_module(&module_dir, &remaining_args),
         _ => {
             println!("Unknown subcommand: {}", subcommand);
@@ -57,6 +58,7 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
             println!("  aktools search-mods <term>     Search modules");
             println!("  aktools install-mods <mod> [<mod>...]  Install module(s)");
             println!("  aktools add-mod <module>       Submit module to community repo");
+            println!("  aktools update-mod <module>   Update module in a repo (owner only)");
             println!("  aktools inspect-mod <module>  Show module contents");
             1
         }
@@ -852,5 +854,175 @@ fn inspect_module(modules_dir: &Path, args: &[String]) -> i32 {
 
     println!("\nTo work in this directory, run:");
     println!("  cd {}", module_path.display());
+    0
+}
+
+fn update_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[String]) -> i32 {
+    if args.is_empty() {
+        println!("Usage: aktools update-mod <module-name> [user/repo]");
+        println!("Update a module you own in a repo.");
+        println!("If no repo specified, uses Akinus21/aktools-modules");
+        return 1;
+    }
+
+    let module_name = &args[0];
+    let (repo_owner, repo_name) = if args.len() > 1 && args[1].contains('/') {
+        let parts: Vec<&str> = args[1].split('/').collect();
+        (parts[0].to_string(), parts[1].to_string())
+    } else {
+        ("Akinus21".to_string(), "aktools-modules".to_string())
+    };
+
+    let module_path = modules_dir.join(module_name);
+    if !module_path.exists() {
+        println!("Error: Module '{}' not found in ~/.aktools/modules/", module_name);
+        return 1;
+    }
+
+    let manifest_path = module_path.join("manifest.xml");
+    if !manifest_path.exists() {
+        println!("Error: Module '{}' has no manifest.xml", module_name);
+        return 1;
+    }
+
+    let manifest_content = match fs::read_to_string(&manifest_path) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Error reading manifest: {}", e);
+            return 1;
+        }
+    };
+
+    let gh_token = if let Ok(token) = std::process::Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+    {
+        if token.status.success() {
+            String::from_utf8_lossy(&token.stdout).trim().to_string()
+        } else {
+            std::env::var("GH_TOKEN")
+                .or_else(|_| std::env::var("GITHUB_TOKEN"))
+                .unwrap_or_default()
+        }
+    } else {
+        std::env::var("GH_TOKEN")
+            .or_else(|_| std::env::var("GITHUB_TOKEN"))
+            .unwrap_or_default()
+    };
+
+    if gh_token.is_empty() {
+        println!("Error: Not authenticated with GitHub.");
+        println!("Run 'gh auth login' or set GH_TOKEN environment variable.");
+        return 1;
+    }
+
+    let api_base = "https://api.github.com";
+    let client = ureq::Agent::new();
+
+    println!("Checking repo access...");
+    match client.get(&format!("{}/repos/{}/{}", api_base, repo_owner, repo_name))
+        .set("Authorization", &format!("Bearer {}", gh_token))
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", "2022-11-28")
+        .call()
+    {
+        Ok(resp) => {
+            if resp.status() != 200 {
+                println!("Error: Cannot access repository {}/{} (status {})", repo_owner, repo_name, resp.status());
+                return 1;
+            }
+        }
+        Err(e) => {
+            println!("Error: Cannot access repository {}/{}: {}", repo_owner, repo_name, e);
+            return 1;
+        }
+    }
+
+    let user_login: String = match client.get(&format!("{}/user", api_base))
+        .set("Authorization", &format!("Bearer {}", gh_token))
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", "2022-11-28")
+        .call()
+    {
+        Ok(resp) => {
+            if let Ok(body) = resp.into_string() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                    json.get("login").and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
+        }
+        Err(_) => String::new(),
+    };
+
+    let has_push_access = user_login == repo_owner;
+
+    if !has_push_access {
+        println!("Error: You don't have push access to {}/{}", repo_owner, repo_name);
+        println!("Update-mod is only for repo owners. Use 'aktools add-mod' to submit a PR.");
+        return 1;
+    }
+
+    println!("Updating '{}' in {}/{}...", module_name, repo_owner, repo_name);
+
+    let files: Vec<PathBuf> = collect_files_recursive(&module_path, &module_path)
+        .into_iter()
+        .filter(|p| {
+            p.ends_with("manifest.xml") || p.ends_with(".sh") || p.ends_with(".bash") || p.ends_with(".py") || p.ends_with(".pl") || p.ends_with(".rb")
+        })
+        .collect();
+
+    for file_path in &files {
+        let relative_path = file_path.strip_prefix(&module_path).map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| file_path.to_string_lossy().to_string());
+        let content = match fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error reading {}: {}", file_path.display(), e);
+                continue;
+            }
+        };
+
+        let encoded_content = base64_encode(&content);
+        let file_path_api = format!("{}/repos/{}/{}/contents/{}", api_base, repo_owner, repo_name, format!("{}/{}", module_name, relative_path));
+
+        let sha = get_file_sha(&client, &file_path_api, &gh_token);
+
+        let mut file_body = serde_json::json!({
+            "message": format!("Update {} file via aktools update-mod", relative_path),
+            "content": encoded_content
+        });
+        if let Some(ref s) = sha {
+            file_body["sha"] = serde_json::json!(s);
+        }
+
+        let file_response = client.put(&file_path_api)
+            .set("Authorization", &format!("Bearer {}", gh_token))
+            .set("Accept", "application/vnd.github+json")
+            .set("X-GitHub-Api-Version", "2022-11-28")
+            .set("Content-Type", "application/json")
+            .send_string(&serde_json::to_string(&file_body).unwrap());
+
+        match file_response {
+            Ok(resp) => {
+                let status = resp.status();
+                if status == 201 {
+                    println!("  Added: {}", relative_path);
+                } else if status == 200 {
+                    println!("  Updated: {}", relative_path);
+                } else {
+                    let err_body = resp.into_string().unwrap_or_default();
+                    eprintln!("  Warning: {} returned status {}: {}", relative_path, status, err_body);
+                }
+            }
+            Err(e) => {
+                eprintln!("  Error updating {}: {}", relative_path, e);
+            }
+        }
+    }
+
+    println!("\nModule '{}' updated successfully in {}/{}", module_name, repo_owner, repo_name);
     0
 }
