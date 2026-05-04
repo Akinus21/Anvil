@@ -632,7 +632,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
             "id": module_name,
             "name": module_name,
             "version": "1.0.0",
-            "author": user_login.as_ref().map(|s| s.as_str()).unwrap_or("unknown"),
+            "author": if user_login.is_empty() { "unknown" } else { &user_login },
             "description": format!("Module submitted via aktools add-mod"),
             "tags": []
         });
@@ -655,7 +655,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
             "id": module_name,
             "name": module_name,
             "version": "1.0.0",
-            "author": user_login.as_ref().map(|s| s.as_str()).unwrap_or("unknown"),
+            "author": if user_login.is_empty() { "unknown" } else { &user_login },
             "description": format!("Module submitted via aktools add-mod"),
             "tags": []
         });
