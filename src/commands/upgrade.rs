@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs;
 
 const DEFAULT_COMMUNITY_REPO: &str = "Akinus21/aktools-modules";
@@ -46,36 +46,68 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
             upgrade_modules(&repos_file, &modules_dir)
         }
         "all" | _ => {
-            let result = upgrade_aktools();
-            if result != 0 {
-                return result;
-            }
+            let aktools_result = upgrade_aktools();
             let repos_file = config_dir.join("repos.json");
             let modules_dir = config_dir.join("modules");
-            upgrade_modules(&repos_file, &modules_dir)
+            let mod_result = upgrade_modules(&repos_file, &modules_dir);
+
+            if aktools_result == 2 && mod_result == 2 {
+                0
+            } else {
+                aktools_result.max(mod_result)
+            }
         }
     }
 }
 
 fn upgrade_aktools() -> i32 {
-    println!("Upgrading AKTools via Homebrew...");
+    println!("Checking for AKTools updates...\n");
+
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    let latest_version = match ureq::get("https://api.github.com/repos/Akinus21/aktools/releases/latest")
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", "2022-11-28")
+        .call()
+    {
+        Ok(resp) => {
+            if let Ok(body) = resp.into_string() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                    json.get("tag_name")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.trim_start_matches('v').to_string())
+                        .unwrap_or_else(|| current_version.to_string())
+                } else {
+                    current_version.to_string()
+                }
+            } else {
+                current_version.to_string()
+            }
+        }
+        Err(_) => current_version.to_string(),
+    };
+
+    if current_version == latest_version {
+        println!("AKTools is up-to-date! (v{})", current_version);
+        return 2;
+    }
+
+    println!("Update available: v{} -> v{}", current_version, latest_version);
+    println!("Upgrading via Homebrew...\n");
 
     let update_result = std::process::Command::new("brew")
         .args(["update"])
         .output();
 
-    match update_result {
-        Ok(output) => {
-            if !output.status.success() {
-                eprintln!("Warning: 'brew update' failed:");
-                eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-            }
+    if let Ok(output) = update_result {
+        if !output.status.success() {
+            eprintln!("Warning: 'brew update' failed:");
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         }
-        Err(e) => {
-            eprintln!("Error running brew update: {}", e);
-            eprintln!("Make sure Homebrew is installed and in your PATH.");
-            return 1;
-        }
+    } else {
+        eprintln!("Error running brew update: {}", update_result.unwrap_err());
+        eprintln!("Make sure Homebrew is installed and in your PATH.");
+        return 1;
     }
 
     let upgrade_result = std::process::Command::new("brew")
@@ -92,10 +124,10 @@ fn upgrade_aktools() -> i32 {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 if stderr.contains("Not a keyword") || stderr.contains("Cask") {
                     println!("AKTools is a cask. Trying 'brew upgrade --cask aktools'...");
-                    let cask_result = std::process::Command::new("brew")
+                    if let Ok(cask_output) = std::process::Command::new("brew")
                         .args(["upgrade", "--cask", "aktools"])
-                        .output();
-                    if let Ok(cask_output) = cask_result {
+                        .output()
+                    {
                         if cask_output.status.success() {
                             println!("AKTools upgraded successfully!");
                             println!("{}", String::from_utf8_lossy(&cask_output.stdout));
@@ -125,7 +157,7 @@ fn load_repos_config(repos_file: &Path) -> RepoConfig {
 }
 
 fn upgrade_modules(repos_file: &Path, modules_dir: &Path) -> i32 {
-    println!("Checking for module updates...\n");
+    println!("\nChecking for module updates...\n");
 
     let config = load_repos_config(repos_file);
 
@@ -139,73 +171,108 @@ fn upgrade_modules(repos_file: &Path, modules_dir: &Path) -> i32 {
         config.repos.clone()
     };
 
-    if modules_dir.exists() {
+    let local_modules: Vec<String> = if modules_dir.exists() {
         if let Ok(entries) = fs::read_dir(modules_dir) {
-            let local_modules: Vec<_> = entries
+            entries
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
                 .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
-                .collect();
+                .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
 
-            let mut updated = 0;
-            let mut failed: Vec<String> = Vec::new();
+    if local_modules.is_empty() {
+        println!("No modules installed.");
+        return 2;
+    }
 
-            for module_name in local_modules {
-                let module_path = modules_dir.join(&module_name);
+    let mut updated = 0;
+    let mut failed: Vec<String> = Vec::new();
+    let mut up_to_date = 0;
 
-                for repo in &repos_to_check {
-                    let registry_url = format!(
-                        "https://raw.githubusercontent.com/{}/{}/main/registry.json",
-                        repo.user, repo.repo
-                    );
+    for module_name in &local_modules {
+        let module_path = modules_dir.join(module_name);
+        let manifest_path = module_path.join("manifest.xml");
 
-                    match ureq::get(&registry_url).call() {
-                        Ok(resp) => {
-                            if let Ok(body) = resp.into_string() {
-                                if let Ok(registry) = serde_json::from_str::<RegistryJson>(&body) {
-                                    if let Some(remote_module) = registry.modules.iter().find(|m| m.id.to_lowercase() == module_name.to_lowercase()) {
-                                        let manifest_path = module_path.join("manifest.xml");
-                                        if let Ok(local_content) = fs::read_to_string(&manifest_path) {
-                                            if let Some(local_version) = extract_version_from_manifest(&local_content) {
-                                                if remote_module.version != local_version {
-                                                    println!("Updating '{}': {} -> {}",
-                                                        module_name, local_version, remote_module.version);
+        for repo in &repos_to_check {
+            let registry_url = format!(
+                "https://raw.githubusercontent.com/{}/{}/main/registry.json",
+                repo.user, repo.repo
+            );
 
-                                                    if let Err(e) = download_module(&module_name, &repo, modules_dir) {
-                                                        eprintln!("  Failed to update: {}", e);
-                                                        failed.push(module_name.clone());
-                                                    } else {
-                                                        updated += 1;
-                                                    }
-                                                    break;
-                                                }
-                                            }
+            if let Ok(resp) = ureq::get(&registry_url).call() {
+                if let Ok(body) = resp.into_string() {
+                    if let Ok(registry) = serde_json::from_str::<RegistryJson>(&body) {
+                        if let Some(remote_module) = registry.modules.iter().find(|m| m.id.to_lowercase() == module_name.to_lowercase()) {
+                            let local_version = if let Ok(local_content) = fs::read_to_string(&manifest_path) {
+                                extract_version_from_manifest(&local_content)
+                            } else {
+                                None
+                            };
+
+                            match local_version {
+                                Some(lv) if lv != remote_module.version => {
+                                    println!("Updating '{}': {} -> {}",
+                                        module_name, lv, remote_module.version);
+
+                                    if let Err(e) = download_module(module_name, repo, modules_dir) {
+                                        eprintln!("  Failed to update: {}", e);
+                                        failed.push(module_name.clone());
+                                    } else {
+                                        updated += 1;
+                                    }
+                                }
+                                Some(_) => {
+                                    up_to_date += 1;
+                                }
+                                None => {
+                                    if let Ok(local_content) = fs::read_to_string(&manifest_path) {
+                                        println!("No version tag in local manifest for '{}', downloading latest...", module_name);
+                                        if let Err(e) = download_module(module_name, repo, modules_dir) {
+                                            eprintln!("  Failed to update: {}", e);
+                                            failed.push(module_name.clone());
+                                        } else {
+                                            updated += 1;
+                                        }
+                                    } else {
+                                        println!("Could not read manifest for '{}', downloading...", module_name);
+                                        if let Err(e) = download_module(module_name, repo, modules_dir) {
+                                            eprintln!("  Failed to update: {}", e);
+                                            failed.push(module_name.clone());
+                                        } else {
+                                            updated += 1;
                                         }
                                     }
                                 }
                             }
+                            break;
                         }
-                        Err(_) => {}
                     }
                 }
             }
-
-            if updated > 0 {
-                let _ = crate::modules::ModuleManager::_write_aliases_to_file(modules_dir, &modules_dir.parent().unwrap().join("aliases.sh"));
-                let _ = crate::commands::update::execute(modules_dir, &modules_dir.parent().unwrap().join("registry.json"));
-            }
-
-            println!("\nModule update complete: {} updated, {} failed", updated, failed.len());
-            if !failed.is_empty() {
-                println!("Failed: {}", failed.join(", "));
-            }
-
-            return if failed.is_empty() { 0 } else { 1 };
         }
     }
 
-    println!("No modules to check or modules directory not found.");
-    0
+    if updated == 0 && failed.is_empty() {
+        println!("All modules are up-to-date! ({} modules checked)", local_modules.len());
+        return 2;
+    }
+
+    if updated > 0 {
+        let _ = crate::modules::ModuleManager::_write_aliases_to_file(modules_dir, &modules_dir.parent().unwrap().join("aliases.sh"));
+        let _ = crate::commands::update::execute(modules_dir, &modules_dir.parent().unwrap().join("registry.json"));
+    }
+
+    println!("\nModule update complete: {} updated, {} failed, {} up-to-date", updated, failed.len(), up_to_date);
+    if !failed.is_empty() {
+        println!("Failed: {}", failed.join(", "));
+    }
+
+    if failed.is_empty() { 0 } else { 1 }
 }
 
 fn extract_version_from_manifest(content: &str) -> Option<String> {
