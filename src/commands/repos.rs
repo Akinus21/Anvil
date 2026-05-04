@@ -434,6 +434,26 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
         }
     }
 
+    let user_login: String = match client.get(&format!("{}/user", api_base))
+        .set("Authorization", &format!("Bearer {}", gh_token))
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", "2022-11-28")
+        .call()
+    {
+        Ok(resp) => {
+            if let Ok(body) = resp.into_string() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                    json.get("login").and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
+        }
+        Err(_) => String::new(),
+    };
+
     println!("Checking if module '{}' exists in registry...", module_name);
     let registry_check_url = format!(
         "https://raw.githubusercontent.com/{}/{}/main/registry.json",
@@ -505,31 +525,19 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
     let fork_full_name = match fork_full_name {
         Some(name) => name,
         None => {
-            let existing_fork_name = format!("{}/{}", repo_owner, repo_name);
-            println!("Using existing fork or rate limited. Trying: {}", existing_fork_name);
-            existing_fork_name
+            if !user_login.is_empty() {
+                let existing_fork_name = format!("{}/{}", user_login, repo_name);
+                println!("Fork may still be creating or already exists. Using: {}", existing_fork_name);
+                existing_fork_name
+            } else {
+                println!("Error: Could not determine fork name. Please try again later.");
+                return 1;
+            }
         }
     };
 
-    let user_login = match client.get(&format!("{}/repos/{}/{}/", api_base, repo_owner, repo_name))
-        .set("Authorization", &format!("Bearer {}", gh_token))
-        .set("Accept", "application/vnd.github+json")
-        .set("X-GitHub-Api-Version", "2022-11-28")
-        .call()
-    {
-        Ok(resp) => {
-            if let Ok(body) = resp.into_string() {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-                    json.get("owner").and_then(|o| o.get("login")).and_then(|v| v.as_str()).map(|s| s.to_string())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-        Err(_) => None,
-    };
+    println!("Waiting for fork to be ready...");
+    std::thread::sleep(std::time::Duration::from_secs(2));
 
     let actual_fork_name = fork_full_name.as_str();
 
@@ -705,6 +713,8 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
     });
 
     println!("Creating pull request...");
+    println!("  Head: {}:{}", actual_fork_name.split('/').next().unwrap_or(""), head_branch);
+    println!("  Base: main");
 
     let pr_response = client.post(&pr_url)
         .set("Authorization", &format!("Bearer {}", gh_token))
@@ -727,6 +737,24 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
                     }
                 }
                 println!("\nSuccess! Pull request created.");
+                0
+            } else {
+                let err_body = resp.into_string().unwrap_or_default();
+                eprintln!("Error: PR creation returned status {}: {}", status, err_body);
+
+                if err_body.contains("head") && err_body.contains("not found") {
+                    eprintln!("\nNote: The fork may still be creating. Try again in a few seconds.");
+                    eprintln!("Or check your fork at: https://github.com/{}/aktools-modules", actual_fork_name.split('/').next().unwrap_or(""));
+                }
+                1
+            }
+        }
+        Err(e) => {
+            eprintln!("Error creating pull request: {}", e);
+            1
+        }
+    }
+}
                 0
             } else {
                 let err_body = resp.into_string().unwrap_or_default();
