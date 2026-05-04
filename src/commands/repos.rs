@@ -632,7 +632,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
             "id": module_name,
             "name": module_name,
             "version": "1.0.0",
-            "author": user_login.as_deref().unwrap_or("unknown"),
+            "author": user_login.as_ref().map(|s| s.as_str()).unwrap_or("unknown"),
             "description": format!("Module submitted via aktools add-mod"),
             "tags": []
         });
@@ -655,7 +655,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
             "id": module_name,
             "name": module_name,
             "version": "1.0.0",
-            "author": user_login.as_deref().unwrap_or("unknown"),
+            "author": user_login.as_ref().map(|s| s.as_str()).unwrap_or("unknown"),
             "description": format!("Module submitted via aktools add-mod"),
             "tags": []
         });
@@ -872,7 +872,7 @@ fn inspect_module(modules_dir: &Path, args: &[String]) -> i32 {
     0
 }
 
-fn update_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[String]) -> i32 {
+fn update_mod(_repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
         println!("Usage: aktools update-mod <module-name> [user/repo]");
         println!("Update a module you own in a repo.");
@@ -900,8 +900,8 @@ fn update_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &
         return 1;
     }
 
-    let manifest_content = match fs::read_to_string(&manifest_path) {
-        Ok(c) => c,
+    let _manifest_content = match fs::read_to_string(&manifest_path) {
+        Ok(_c) => _c,
         Err(e) => {
             println!("Error reading manifest: {}", e);
             return 1;

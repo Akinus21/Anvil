@@ -230,7 +230,7 @@ fn upgrade_modules(repos_file: &Path, modules_dir: &Path) -> i32 {
                                     up_to_date += 1;
                                 }
                                 None => {
-                                    if let Ok(local_content) = fs::read_to_string(&manifest_path) {
+                                    if fs::read_to_string(&manifest_path).is_ok() {
                                         println!("No version tag in local manifest for '{}', downloading latest...", module_name);
                                         if let Err(e) = download_module(module_name, repo, modules_dir) {
                                             eprintln!("  Failed to update: {}", e);

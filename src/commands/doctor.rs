@@ -451,7 +451,7 @@ fn detect_scheduler() -> &'static str {
     "unknown"
 }
 
-fn check_systemd_autoupdate(config_dir: &Path, no_fix: bool, fixed: &mut i32, issues_found: &mut i32) {
+fn check_systemd_autoupdate(_config_dir: &Path, no_fix: bool, fixed: &mut i32, issues_found: &mut i32) {
     let home = dirs::home_dir().unwrap_or_default();
     let service_path = home.join(".config/systemd/user/aktools-updater.service");
     let timer_path = home.join(".config/systemd/user/aktools-updater.timer");
