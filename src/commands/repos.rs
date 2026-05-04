@@ -553,10 +553,15 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
         let encoded_content = base64_encode(&content);
         let file_path_api = format!("{}/repos/{}/contents/{}", api_base, actual_fork_name, format!("{}/{}", module_name, relative_path));
 
-        let file_body = serde_json::json!({
+        let sha = get_file_sha(&client, &file_path_api, &gh_token);
+
+        let mut file_body = serde_json::json!({
             "message": format!("Add {} file from aktools add-mod", relative_path),
             "content": encoded_content
         });
+        if let Some(ref s) = sha {
+            file_body["sha"] = serde_json::json!(s);
+        }
 
         let file_response = client.put(&file_path_api)
             .set("Authorization", &format!("Bearer {}", gh_token))
@@ -776,6 +781,27 @@ fn collect_files_recursive(dir: &Path, base: &Path) -> Vec<PathBuf> {
         }
     }
     files
+}
+
+fn get_file_sha(client: &ureq::Agent, file_url: &str, token: &str) -> Option<String> {
+    match client.get(file_url)
+        .set("Authorization", &format!("Bearer {}", token))
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", "2022-11-28")
+        .call()
+    {
+        Ok(resp) => {
+            if resp.status() == 200 {
+                if let Ok(body) = resp.into_string() {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                        return json.get("sha").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    }
+                }
+            }
+            None
+        }
+        Err(_) => None,
+    }
 }
 
 fn inspect_module(modules_dir: &Path, args: &[String]) -> i32 {
