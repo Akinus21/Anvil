@@ -524,7 +524,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
 
     let fork_full_name_opt = fork_full_name;
     let fork_full_name = match fork_full_name_opt {
-        Some(name) => name,
+        Some(ref name) => name,
         None => {
             if !user_login.is_empty() {
                 let existing_fork_name = format!("{}/{}", user_login, repo_name);
