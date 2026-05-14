@@ -537,9 +537,45 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
     };
 
     println!("Waiting for fork to be ready...");
-    std::thread::sleep(std::time::Duration::from_secs(2));
+    let mut attempts = 0;
+    let max_attempts = 10;
+    let fork_name_for_check = if fork_full_name.is_some() {
+        fork_full_name.as_ref().unwrap().clone()
+    } else {
+        format!("{}/{}", user_login, repo_name)
+    };
 
-    let actual_fork_name = fork_full_name.as_str();
+    let fork_ready = loop {
+        attempts += 1;
+        if attempts >= max_attempts {
+            println!("Fork may still be creating (attempt {}/{}). Continuing anyway...", attempts, max_attempts);
+            break false;
+        }
+
+        let check_url = format!("{}/repos/{}/{}", api_base, fork_name_for_check, repo_name);
+        match client.get(&check_url)
+            .set("Authorization", &format!("Bearer {}", gh_token))
+            .set("Accept", "application/vnd.github+json")
+            .set("X-GitHub-Api-Version", "2022-11-28")
+            .call()
+        {
+            Ok(resp) if resp.status() == 200 => {
+                println!("Fork ready!");
+                break true;
+            }
+            _ => {
+                println!("  Waiting for fork... (attempt {}/{})", attempts, max_attempts);
+                std::thread::sleep(std::time::Duration::from_secs(3));
+            }
+        }
+    };
+
+    if !fork_ready && fork_full_name.is_none() {
+        println!("Error: Could not confirm fork creation. Please try again later.");
+        return 1;
+    }
+
+    let actual_fork_name = fork_full_name.as_deref().unwrap_or(&fork_name_for_check);
 
     println!("Creating module files in your fork...");
 
