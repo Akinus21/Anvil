@@ -522,7 +522,8 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
         }
     };
 
-    let fork_full_name = match fork_full_name {
+    let fork_full_name_opt = fork_full_name;
+    let fork_full_name = match fork_full_name_opt {
         Some(name) => name,
         None => {
             if !user_login.is_empty() {
@@ -539,8 +540,8 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
     println!("Waiting for fork to be ready...");
     let mut attempts = 0;
     let max_attempts = 10;
-    let fork_name_for_check = if fork_full_name.is_some() {
-        fork_full_name.as_ref().unwrap().clone()
+    let fork_name_for_check = if fork_full_name_opt.is_some() {
+        fork_full_name.clone()
     } else {
         format!("{}/{}", user_login, repo_name)
     };
@@ -570,12 +571,12 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
         }
     };
 
-    if !fork_ready && fork_full_name.is_none() {
+    if !fork_ready && fork_full_name_opt.is_none() {
         println!("Error: Could not confirm fork creation. Please try again later.");
         return 1;
     }
 
-    let actual_fork_name = fork_full_name.as_deref().unwrap_or(&fork_name_for_check);
+    let actual_fork_name = &fork_full_name;
 
     println!("Creating module files in your fork...");
 
