@@ -2,19 +2,8 @@ use std::path::Path;
 use std::fs;
 use std::io::{self, Write};
 
-pub fn execute(config_dir: &Path) -> i32 {
-    let aliases_file = config_dir.join("aliases.sh");
-
-    println!("AKTools Alias Editor\n");
-
-    let current_aliases = if aliases_file.exists() {
-        fs::read_to_string(&aliases_file).unwrap_or_default()
-    } else {
-        println!("Aliases file not found. Creating new one...");
-        String::new()
-    };
-
-    let aliases: Vec<(String, String)> = current_aliases
+fn parse_aliases(content: &str) -> Vec<(String, String)> {
+    content
         .lines()
         .filter(|line| line.trim().starts_with("alias ") && line.contains("='") && line.ends_with("'"))
         .filter_map(|line| {
@@ -28,17 +17,35 @@ pub fn execute(config_dir: &Path) -> i32 {
                 None
             }
         })
-        .collect();
+        .collect()
+}
 
-    println!("Current aliases:");
+fn print_aliases(aliases: &[(String, String)]) {
+    println!("\nCurrent aliases:");
     if aliases.is_empty() {
         println!("  (none)");
     } else {
-        for (name, cmd) in &aliases {
+        for (name, cmd) in aliases {
             println!("  {:20} -> {}", name, cmd);
         }
     }
     println!();
+}
+
+pub fn execute(config_dir: &Path) -> i32 {
+    let aliases_file = config_dir.join("aliases.sh");
+
+    println!("AKTools Alias Editor\n");
+
+    let mut current_aliases = if aliases_file.exists() {
+        fs::read_to_string(&aliases_file).unwrap_or_default()
+    } else {
+        println!("Aliases file not found. Creating new one...");
+        String::new()
+    };
+
+    let mut aliases = parse_aliases(&current_aliases);
+    print_aliases(&aliases);
 
     loop {
         print!("Options: (a)dd alias, (r)emove alias, (q)uit: ");
@@ -98,7 +105,8 @@ pub fn execute(config_dir: &Path) -> i32 {
                 }
 
                 current_aliases = new_content;
-
+                aliases = parse_aliases(&current_aliases);
+                print_aliases(&aliases);
                 println!("  Added alias: {} -> {}", alias_name, alias_cmd);
             }
             Some('r') => {
@@ -132,7 +140,8 @@ pub fn execute(config_dir: &Path) -> i32 {
                 }
 
                 current_aliases = new_content;
-
+                aliases = parse_aliases(&current_aliases);
+                print_aliases(&aliases);
                 println!("  Removed alias: {}", alias_name);
             }
             Some('q') => {
