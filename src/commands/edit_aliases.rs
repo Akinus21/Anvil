@@ -97,6 +97,8 @@ pub fn execute(config_dir: &Path) -> i32 {
                     continue;
                 }
 
+                current_aliases = new_content;
+
                 println!("  Added alias: {} -> {}", alias_name, alias_cmd);
             }
             Some('r') => {
@@ -120,11 +122,16 @@ pub fn execute(config_dir: &Path) -> i32 {
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
+                if !new_content.is_empty() && !new_content.ends_with('\n') {
+                    new_content.push('\n');
+                }
 
-                if let Err(e) = fs::write(&aliases_file, new_content) {
+                if let Err(e) = fs::write(&aliases_file, new_content.clone()) {
                     println!("  Error writing aliases file: {}", e);
                     continue;
                 }
+
+                current_aliases = new_content;
 
                 println!("  Removed alias: {}", alias_name);
             }
