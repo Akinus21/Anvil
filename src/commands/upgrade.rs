@@ -63,7 +63,7 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
 fn upgrade_aktools() -> i32 {
     println!("Checking for AKTools updates...\n");
 
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = get_installed_aktools_version().unwrap_or(env!("CARGO_PKG_VERSION"));
 
     let latest_version = match ureq::get("https://api.github.com/repos/Akinus21/aktools/releases/latest")
         .set("Accept", "application/vnd.github+json")
@@ -146,6 +146,49 @@ fn upgrade_aktools() -> i32 {
         }
     }
 }
+
+fn get_installed_aktools_version() -> Option<String> {
+    let output = std::process::Command::new("brew")
+        .args(["info", "--json", "aktools"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        if let Ok(text) = String::from_utf8_lossy(&output.stdout).parse::<serde_json::Value>() {
+            if let Some(arr) = text.as_array() {
+                if let Some(obj) = arr.first() {
+                    if let Some(versions) = obj.get("installed").and_then(|v| v.as_array()) {
+                        if let Some(v) = versions.first() {
+                            if let Some(version) = v.get("version").and_then(|vv| vv.as_str()) {
+                                return Some(version.to_string());
+                            }
+                        }
+                    }
+                    if let Some(version) = obj.get("versions").and_then(|v| v.as_str()) {
+                        return Some(version.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    let cellar_path = std::process::Command::new("brew")
+        .args(["--prefix"])
+        .output()
+        .ok()?;
+
+    let cellar = String::from_utf8_lossy(&cellar_path.stdout).trim().to_string();
+    let aktools_cellar = format!("{}/Cellar/aktools", cellar);
+
+    if let Ok(entries) = fs::read_dir(&aktools_cellar) {
+        if let Some(entry) = entries.filter_map(|e| e.ok()).max_by(|a, b| {
+            a.file_name().to_string_lossy().cmp(&b.file_name().to_string_lossy())
+        }) {
+            return entry.file_name().to_str().map(|s| s.to_string());
+        }
+    }
+
+    None
 
 fn load_repos_config(repos_file: &Path) -> RepoConfig {
     if let Ok(content) = fs::read_to_string(repos_file) {
@@ -232,11 +275,23 @@ fn upgrade_modules(repos_file: &Path, modules_dir: &Path) -> i32 {
                                 None => {
                                     if fs::read_to_string(&manifest_path).is_ok() {
                                         println!("No version tag in local manifest for '{}', downloading latest...", module_name);
-                                        if let Err(e) = download_module(module_name, repo, modules_dir) {
-                                            eprintln!("  Failed to update: {}", e);
-                                            failed.push(module_name.clone());
-                                        } else {
-                                            updated += 1;
+                                        match download_module(module_name, repo, modules_dir) {
+                                            Ok(_) => {
+                                                updated += 1;
+                                                if let Ok(new_content) = fs::read_to_string(&manifest_path) {
+                                                    let remote_ver = &remote_module.version;
+                                                    if !new_content.contains("<version>") {
+                                                        let new_manifest = new_content.replace("<module>", &format!("<module>\n    <version>{}</version>", remote_ver));
+                                                        if let Ok(_) = fs::write(&manifest_path, new_manifest) {
+                                                            println!("  Added version tag: {}", remote_ver);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!("  Failed to update: {}", e);
+                                                failed.push(module_name.clone());
+                                            }
                                         }
                                     } else {
                                         println!("Could not read manifest for '{}', downloading...", module_name);
