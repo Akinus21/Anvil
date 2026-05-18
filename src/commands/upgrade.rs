@@ -189,6 +189,7 @@ fn get_installed_aktools_version() -> Option<String> {
     }
 
     None
+}
 
 fn load_repos_config(repos_file: &Path) -> RepoConfig {
     if let Ok(content) = fs::read_to_string(repos_file) {
