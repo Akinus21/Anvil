@@ -123,7 +123,7 @@ pub fn execute(config_dir: &Path) -> i32 {
                     continue;
                 }
 
-                let new_content: String = current_aliases
+                let mut new_content: String = current_aliases
                     .lines()
                     .filter(|line| {
                         !line.trim().starts_with(&format!("alias {}", alias_name))
