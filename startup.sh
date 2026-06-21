@@ -537,6 +537,19 @@ phase6() {
     echo
     log_warn "IMPORTANT: Log out and back in for docker group permissions to apply"
     echo
+
+    log_info "=========================================="
+    log_info "  PHASE 6: Installing Homebrew and Just and Tapping Akinus repos"
+    log_info "=========================================="
+    echo
+
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    echo >> /home/akinus/.bashrc
+    echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"' >> /home/akinus/.bashrc
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"
+    brew install just
+    brew tap akinus/forgejo https://forge.akinus21.com/akinus/homebrew-akinus21-forge.git
+    brew trust akinus/forgejo
 }
 
 # ============================================================================
