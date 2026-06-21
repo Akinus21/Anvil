@@ -345,10 +345,6 @@ phase5() {
     log_info "=========================================="
     echo
 
-    # This script runs as root, so a bare ~ would resolve to /root — but storage_rsa
-    # conceptually belongs to akinus (the operator), not root. Target the real path
-    # explicitly so the key lands somewhere akinus can manage without sudo, and root
-    # can still read it fine at boot for the systemd automount regardless of ownership.
     local user_home="/home/akinus"
     local user_ssh_dir="${user_home}/.ssh"
 
@@ -396,23 +392,53 @@ phase5() {
     apt update
     apt install -y sshfs
 
-    log_info "Mounting Storage Box..."
+    # Ensure FUSE allows other users (required for allow_other)
+    if ! grep -q "^user_allow_other" /etc/fuse.conf 2>/dev/null; then
+        log_info "Enabling user_allow_other in /etc/fuse.conf..."
+        echo "user_allow_other" >> /etc/fuse.conf
+    fi
+
+    # Make sure the mount point is owned by the local user before mounting
+    # (FUSE respects this when uid/gid mapping is set)
     mkdir -p /mnt/storagebox-services
-    sshfs -o allow_other,default_permissions,IdentityFile="${user_ssh_dir}/storage_rsa",IdentitiesOnly=yes,StrictHostKeyChecking=accept-new \
-        -p23 "${SB_USER}@${SB_HOST}:/" /mnt/storagebox-services
+    chown akinus:akinus /mnt/storagebox-services
 
-    log_info "Creating services folder structure..."
-    mkdir -p /mnt/storagebox-services/services/linkding
-    mkdir -p /mnt/storagebox-services/services/vaultwarden
-    mkdir -p /mnt/storagebox-services/services/akocloud
-    log_success "Folders created:"
-    ls -la /mnt/storagebox-services/services/
+    log_info "Mounting Storage Box..."
+    # NOTE: The remote server's root dir is dr-x--x--x, so we mount /home which
+    # has normal permissions. The uid/gid mapping makes remote files appear
+    # owned by the local akinus user. No default_permissions — that enforces
+    # the remote server's restrictive permissions and breaks ls.
+    sshfs \
+        -o uid=1000,gid=1000 \
+        -o allow_other \
+        -o IdentityFile="${user_ssh_dir}/storage_rsa" \
+        -o IdentitiesOnly=yes \
+        -o StrictHostKeyChecking=accept-new \
+        -p23 \
+        "${SB_USER}@${SB_HOST}:/home" \
+        /mnt/storagebox-services
 
+    log_info "Verifying mount..."
+    if ls /mnt/storagebox-services &>/dev/null; then
+        log_success "Storage Box mounted successfully"
+        ls -la /mnt/storagebox-services
+    else
+        log_error "Mount verification failed. Check sshfs options."
+        exit 1
+    fi
+
+    # --- Persistent mount via systemd automount ---
     log_info "Adding persistent mount to /etc/fstab..."
     if ! grep -q "storagebox-services" /etc/fstab; then
-        echo "${SB_USER}@${SB_HOST}:/ /mnt/storagebox-services fuse.sshfs noauto,x-systemd.automount,_netdev,users,idmap=user,IdentityFile=${user_ssh_dir}/storage_rsa,IdentitiesOnly=yes,allow_other,reconnect 0 0" >> /etc/fstab
+        # Key options explained:
+        #   uid=1000,gid=1000        → map remote files to local akinus user
+        #   allow_other             → let local users (not just root) access mount
+        #   idmap=user              → map remote UID to local UID (works with allow_other)
+        #   noauto,x-systemd.automount → don't mount at boot; mount on first access
+        #   _netdev → wait for network before attempting mount
+        echo "${SB_USER}@${SB_HOST}:/home /mnt/storagebox-services fuse.sshfs noauto,x-systemd.automount,_netdev,users,uid=1000,gid=1000,idmap=user,IdentityFile=${user_ssh_dir}/storage_rsa,IdentitiesOnly=yes,allow_other,reconnect 0 0" >> /etc/fstab
         systemctl daemon-reload
-        log_success "fstab entry added"
+        log_success "fstab entry added (automount on first access)"
     else
         log_warn "fstab already contains a storagebox-services entry, skipping"
     fi
@@ -446,7 +472,6 @@ phase5() {
     log_success "Phase 5 complete"
     echo
 }
-
 # ============================================================================
 # PHASE 6: Install Docker
 # ============================================================================
