@@ -196,8 +196,11 @@ phase3() {
     echo
 
     # Generate keys
+    # Note: these are transient root-owned scratch files, deleted at the end of this
+    # phase once embedded in /etc/wireguard/wg0.conf — they're not akinus's files,
+    # so /root is the correct (and now explicit, rather than ~-implied) location.
     log_info "Generating WireGuard keypair..."
-    cd ~
+    cd /root
     umask 077
     wg genkey | tee private.key | wg pubkey > public.key
     PRIVATE_KEY=$(cat private.key)
@@ -274,7 +277,7 @@ EOF
     echo
 
     # Clean up raw key files now that the private key is embedded (with chmod 600) in wg0.conf
-    rm -f ~/private.key ~/public.key
+    rm -f /root/private.key /root/public.key
 
     log_success "Phase 3 complete"
     echo
@@ -342,6 +345,17 @@ phase5() {
     log_info "=========================================="
     echo
 
+    # This script runs as root, so a bare ~ would resolve to /root — but storage_rsa
+    # conceptually belongs to akinus (the operator), not root. Target the real path
+    # explicitly so the key lands somewhere akinus can manage without sudo, and root
+    # can still read it fine at boot for the systemd automount regardless of ownership.
+    local user_home="/home/akinus"
+    local user_ssh_dir="${user_home}/.ssh"
+
+    mkdir -p "${user_ssh_dir}"
+    chown akinus:akinus "${user_ssh_dir}"
+    chmod 700 "${user_ssh_dir}"
+
     # --- Storage Box SSH key ---
     log_warn "=========================================="
     log_warn "  STORAGE BOX SSH KEY SETUP"
@@ -350,24 +364,25 @@ phase5() {
     echo "If this keypair already exists elsewhere, copy its contents into the files below."
     echo
     echo "  1. In another terminal, create the private key:"
-    echo "     nano ~/.ssh/storage_rsa"
+    echo "     sudo nano ${user_ssh_dir}/storage_rsa"
     echo "     (paste the private key content, save and exit)"
     echo
     echo "  2. Create the public key:"
-    echo "     nano ~/.ssh/storage_rsa.pub"
+    echo "     sudo nano ${user_ssh_dir}/storage_rsa.pub"
     echo "     (paste the public key content, save and exit)"
     echo
-    read -rp "Press ENTER once both ~/.ssh/storage_rsa and ~/.ssh/storage_rsa.pub exist: "
+    read -rp "Press ENTER once both ${user_ssh_dir}/storage_rsa and ${user_ssh_dir}/storage_rsa.pub exist: "
     echo
 
-    if [[ ! -f ~/.ssh/storage_rsa ]] || [[ ! -f ~/.ssh/storage_rsa.pub ]]; then
-        log_error "storage_rsa key files not found in ~/.ssh/. Aborting."
+    if [[ ! -f "${user_ssh_dir}/storage_rsa" ]] || [[ ! -f "${user_ssh_dir}/storage_rsa.pub" ]]; then
+        log_error "storage_rsa key files not found in ${user_ssh_dir}/. Aborting."
         exit 1
     fi
 
-    chmod 600 ~/.ssh/storage_rsa
-    chmod 644 ~/.ssh/storage_rsa.pub
-    log_success "Storage key files found, permissions set"
+    chown akinus:akinus "${user_ssh_dir}/storage_rsa" "${user_ssh_dir}/storage_rsa.pub"
+    chmod 600 "${user_ssh_dir}/storage_rsa"
+    chmod 644 "${user_ssh_dir}/storage_rsa.pub"
+    log_success "Storage key files found, ownership and permissions set"
     echo
 
     # --- Storage Box mount ---
@@ -375,7 +390,7 @@ phase5() {
     read -rp "Enter the Storage Box hostname (e.g. u583127.your-storagebox.de): " SB_HOST
 
     log_info "Authorizing key on the Storage Box..."
-    ssh -p23 -i ~/.ssh/storage_rsa -o StrictHostKeyChecking=accept-new "${SB_USER}@${SB_HOST}" install-ssh-key < ~/.ssh/storage_rsa.pub
+    ssh -p23 -i "${user_ssh_dir}/storage_rsa" -o StrictHostKeyChecking=accept-new "${SB_USER}@${SB_HOST}" install-ssh-key < "${user_ssh_dir}/storage_rsa.pub"
 
     log_info "Installing sshfs..."
     apt update
@@ -383,7 +398,7 @@ phase5() {
 
     log_info "Mounting Storage Box..."
     mkdir -p /mnt/storagebox-services
-    sshfs -o allow_other,default_permissions,IdentityFile=/root/.ssh/storage_rsa,IdentitiesOnly=yes,StrictHostKeyChecking=accept-new \
+    sshfs -o allow_other,default_permissions,IdentityFile="${user_ssh_dir}/storage_rsa",IdentitiesOnly=yes,StrictHostKeyChecking=accept-new \
         -p23 "${SB_USER}@${SB_HOST}:/" /mnt/storagebox-services
 
     log_info "Creating services folder structure..."
@@ -395,7 +410,7 @@ phase5() {
 
     log_info "Adding persistent mount to /etc/fstab..."
     if ! grep -q "storagebox-services" /etc/fstab; then
-        echo "${SB_USER}@${SB_HOST}:/ /mnt/storagebox-services fuse.sshfs noauto,x-systemd.automount,_netdev,users,idmap=user,IdentityFile=/root/.ssh/storage_rsa,IdentitiesOnly=yes,allow_other,reconnect 0 0" >> /etc/fstab
+        echo "${SB_USER}@${SB_HOST}:/ /mnt/storagebox-services fuse.sshfs noauto,x-systemd.automount,_netdev,users,idmap=user,IdentityFile=${user_ssh_dir}/storage_rsa,IdentitiesOnly=yes,allow_other,reconnect 0 0" >> /etc/fstab
         systemctl daemon-reload
         log_success "fstab entry added"
     else
