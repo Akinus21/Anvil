@@ -24,6 +24,8 @@ on:
 # /tmp/triage.json which the workflow then reads.
 #
 env:
+  PLATFORM:          ${{ vars.PLATFORM || 'github' }}
+  RUNNER_LABEL:     ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
   BOT_NAME:              ${{ vars.BOT_NAME || 'devops-bot' }}
   BOT_EMAIL:             ${{ vars.BOT_EMAIL || 'devops-bot@akinus21.com' }}
   DEVOPS_BRANCH:         ${{ vars.DEVOPS_BRANCH || 'devops' }}
@@ -48,7 +50,7 @@ concurrency:
 jobs:
   label_check:
     if: github.event_name == 'issues'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     outputs:
       relevant: ${{ steps.check.outputs.relevant }}
     steps:
@@ -96,7 +98,7 @@ jobs:
   triage:
     needs: label_check
     if: github.event_name == 'issues' && needs.label_check.outputs.relevant == 'true'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     outputs:
       action: ${{ steps.parse.outputs.action }}
       branch_name: ${{ steps.parse.outputs.branch_name }}
@@ -268,7 +270,7 @@ jobs:
   comment:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'comment'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - name: Acknowledge
         env:
@@ -284,7 +286,7 @@ jobs:
   skip-notify:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'skip'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - name: Post skip reason
         env:
@@ -317,7 +319,7 @@ jobs:
   create-fix-branch:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'fix'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -578,7 +580,7 @@ jobs:
 
   build-iterate:
     if: github.event_name == 'push'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -736,7 +738,7 @@ jobs:
   create-pr:
     needs: build-iterate
     if: github.event_name == 'push' && needs.build-iterate.result == 'success'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - name: Open PR issue-N -> devops
         env:

@@ -33,6 +33,8 @@ on:
 # on this branch.
 #
 env:
+  PLATFORM:          ${{ vars.PLATFORM || 'github' }}
+  RUNNER_LABEL:     ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
   BOT_NAME:              ${{ vars.BOT_NAME || 'devops-bot' }}
   BOT_EMAIL:             ${{ vars.BOT_EMAIL || 'devops-bot@akinus21.com' }}
   MAIN_BRANCH:           ${{ vars.MAIN_BRANCH || 'main' }}
@@ -57,7 +59,7 @@ jobs:
   # build/release commands through the same source of truth.
   # ============================================================
   detect:
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     outputs:
       language:    ${{ steps.det.outputs.language }}
       bin_name:    ${{ steps.det.outputs.bin_name }}
@@ -144,7 +146,7 @@ jobs:
   build-iterate:
     needs: detect
     if: contains(github.event.head_commit.message, '[release-bot-skip]') == false
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -297,7 +299,7 @@ jobs:
       needs.build-iterate.result == 'success' &&
       contains(github.event.head_commit.message, '[release-bot-skip]') == false &&
       needs.detect.outputs.language != 'other'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     outputs:
       version:    ${{ steps.bump.outputs.version }}
       asset_url:  ${{ steps.upload.outputs.asset_url }}
@@ -583,7 +585,7 @@ jobs:
     if: |
       needs.release.result == 'success' &&
       contains('rust go', needs.detect.outputs.language)
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     outputs:
       x86_64_linux_sha: ${{ steps.bottle_x86.outputs.sha256 }}
       arm64_linux_sha:  ${{ steps.bottle_arm64.outputs.sha256 }}
@@ -781,7 +783,7 @@ jobs:
       needs.release.result == 'success' &&
       needs.bottles.result == 'success' &&
       vars.BREW_TAP_ENABLED == 'true'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     outputs:
       rendered: ${{ steps.render.outputs.rendered }}
     steps:
@@ -948,7 +950,7 @@ jobs:
     if: |
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
       (needs.bottles.result == 'success' || needs.bottles.result == 'skipped')
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - name: Delete orphaned issue branches + toggle stale labels
         env:

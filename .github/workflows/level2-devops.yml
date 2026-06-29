@@ -17,6 +17,8 @@ on:
 # diff and pushes it.
 #
 env:
+  PLATFORM:          ${{ vars.PLATFORM || 'github' }}
+  RUNNER_LABEL:     ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
   BOT_NAME:              ${{ vars.BOT_NAME || 'devops-bot' }}
   BOT_EMAIL:             ${{ vars.BOT_EMAIL || 'devops-bot@akinus21.com' }}
   DEVOPS_BRANCH:         ${{ vars.DEVOPS_BRANCH || 'devops' }}
@@ -31,7 +33,7 @@ concurrency:
 
 jobs:
   build-iterate:
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -189,7 +191,7 @@ jobs:
   create-pr:
     needs: build-iterate
     if: needs.build-iterate.result == 'success'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - name: Open PR devops -> main
         env:
@@ -231,7 +233,7 @@ jobs:
   close-merged-issue:
     needs: create-pr
     if: needs.create-pr.result == 'success'
-    runs-on: rust-ci
+    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
     steps:
       - uses: actions/checkout@v4
         with:
