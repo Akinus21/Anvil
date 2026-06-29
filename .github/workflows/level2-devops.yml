@@ -1,5 +1,5 @@
 name: Level 2 — Devops
-run-name: "→ ${{ env.MAIN_BRANCH }} ← ${{ github.ref_name }}"
+run-name: "→ ${{ vars.MAIN_BRANCH || 'main' }} ← ${{ github.ref_name }}"
 
 on:
   push:
