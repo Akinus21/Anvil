@@ -63,7 +63,7 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
 fn upgrade_aktools() -> i32 {
     println!("Checking for AKTools updates...\n");
 
-    let current_version = get_installed_aktools_version().unwrap_or(env!("CARGO_PKG_VERSION"));
+    let current_version = get_installed_aktools_version().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
 
     let latest_version = match ureq::get("https://api.github.com/repos/Akinus21/aktools/releases/latest")
         .set("Accept", "application/vnd.github+json")
