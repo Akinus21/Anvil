@@ -36,9 +36,9 @@ jobs:
           set -euo pipefail
           # install.sh rewrites these literals in the workflow files.
           # We need the same values to apply the same rewrite before comparing.
-          MAIN_BRANCH=$(grep -m1 'MAIN_BRANCH' .forgejo/workflows/level1-main.yml | awk -F"'" '{print $2}')
-          DEV_BRANCH=$(grep -m1 'DEV_BRANCH\|DEVOPS_BRANCH' .forgejo/workflows/level1-main.yml | awk -F"'" '{print $2}')
-          ISSUE_PREFIX=$(grep -m1 'ISSUE_BRANCH_PREFIX' .forgejo/workflows/level1-main.yml | awk -F"'" '{print $2}')
+          MAIN_BRANCH=$(grep -m1 'MAIN_BRANCH' .github/workflows/level1-main.yml | awk -F"'" '{print $2}')
+          DEV_BRANCH=$(grep -m1 'DEV_BRANCH\|DEVOPS_BRANCH' .github/workflows/level1-main.yml | awk -F"'" '{print $2}')
+          ISSUE_PREFIX=$(grep -m1 'ISSUE_BRANCH_PREFIX' .github/workflows/level1-main.yml | awk -F"'" '{print $2}')
           ISSUE_PREFIX_RE=$(printf '%s' "$ISSUE_PREFIX" | sed 's/[][\\.^$*]/\\&/g')
           echo "Detected: main=$MAIN_BRANCH devops=$DEV_BRANCH issue_prefix=$ISSUE_PREFIX"
           echo "MAIN_BRANCH=$MAIN_BRANCH" >> "$GITHUB_OUTPUT"
@@ -55,8 +55,8 @@ jobs:
           ISSUE_PREFIX="${{ steps.detect.outputs.ISSUE_PREFIX }}"
           ISSUE_PREFIX_RE="${{ steps.detect.outputs.ISSUE_PREFIX_RE }}"
 
-          TEMPLATE_DIR="/tmp/template/.forgejo/workflows"
-          LOCAL_DIR=".forgejo/workflows"
+          TEMPLATE_DIR="/tmp/template/.github/workflows"
+          LOCAL_DIR=".github/workflows"
 
           # The install.sh sed transformations (applied to template before compare)
           apply_install_rewrite() {

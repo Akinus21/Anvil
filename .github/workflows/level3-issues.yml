@@ -438,7 +438,7 @@ jobs:
               print('- You may add new files, new modules, and new dependencies as needed.')
               print('- Match the existing code style (use tabs as in `cargo fmt` would produce; check existing files for conventions).')
           print('- If the issue is ambiguous or cannot be addressed by code changes, leave a TODO comment in a sensible place and explain in a final assistant message - the workflow will still commit.')
-          print('- Do NOT edit `AGENTS.md`, `.forgejo/workflows/*`, or `Formula/*` - those are managed by the release pipeline.')
+          print('- Do NOT edit `AGENTS.md`, `.github/workflows/*`, or `Formula/*` - those are managed by the release pipeline.')
           print('- Do NOT modify `Cargo.toml` / `package.json` / `pyproject.toml` version field (the release pipeline owns that). You may add dependencies.')
           PYEOF
 
@@ -685,7 +685,7 @@ jobs:
           print('# Rules')
           print()
           print('- Make the minimal change that fixes the build.')
-          print('- Do NOT edit `AGENTS.md`, `.forgejo/workflows/*`, or `Formula/*`.')
+          print('- Do NOT edit `AGENTS.md`, `.github/workflows/*`, or `Formula/*`.')
           print('- Do NOT modify `Cargo.toml` version.')
           print()
           print('# Build log (last 12KB)')

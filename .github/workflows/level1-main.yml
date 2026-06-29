@@ -238,7 +238,7 @@ jobs:
           print('# Rules')
           print()
           print('- Make the minimal change that fixes the build.')
-          print('- Do NOT edit `AGENTS.md`, `.forgejo/workflows/*`, or `Formula/*`.')
+          print('- Do NOT edit `AGENTS.md`, `.github/workflows/*`, or `Formula/*`.')
           print('- Do NOT modify `Cargo.toml` version.')
           print()
           print('# Build log (last 12KB)')
