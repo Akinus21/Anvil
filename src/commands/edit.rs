@@ -1,8 +1,10 @@
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
-use crate::modules::ModuleManager;
+
+use crate::modules::{ModuleManager, ModuleManifest, OptionSwitch};
 
 pub fn execute(modules_dir: &Path, _registry_path: &Path, module_name: Option<String>) -> i32 {
+    // Phase 1: Load the module list for selection
     let modules = match ModuleManager::scan_modules(modules_dir) {
         Ok(m) => m,
         Err(e) => {
@@ -11,6 +13,7 @@ pub fn execute(modules_dir: &Path, _registry_path: &Path, module_name: Option<St
         }
     };
 
+    // Phase 2: Select which module to edit
     let selected_name = if let Some(name) = module_name {
         if !modules.contains_key(&name) {
             println!("Error: module '{}' not found", name);
@@ -18,413 +21,688 @@ pub fn execute(modules_dir: &Path, _registry_path: &Path, module_name: Option<St
         }
         name
     } else {
-        loop {
-            println!("\nInstalled modules:");
-            let mut names: Vec<_> = modules.keys().collect();
-            names.sort();
-            for (i, name) in names.iter().enumerate() {
-                println!("  {} - {}", i + 1, name);
-            }
-            println!("  q - quit");
-
-            print!("\nSelect module to edit: ");
-            std::io::stdout().flush().unwrap();
-            let mut input = String::new();
-            if std::io::stdin().read_line(&mut input).is_err() {
-                println!("Error reading input");
-                continue;
-            }
-
-            let input = input.trim();
-            if input == "q" {
-                return 0;
-            }
-
-            if let Ok(idx) = input.parse::<usize>() {
-                if idx > 0 && idx <= names.len() {
-                    break names[idx - 1].clone();
-                }
-            }
-            println!("Invalid selection");
+        match select_module_from_list(&modules) {
+            Some(name) => name,
+            None => return 0,
         }
     };
 
-    loop {
-        let manifest = modules.get(&selected_name).expect("Module not found");
+    // Phase 3: Load the manifest ONCE into memory
+    let module_path = modules_dir.join(&selected_name);
+    let mut manifest = match ModuleManager::load_manifest(&module_path) {
+        Ok(m) => m,
+        Err(e) => {
+            println!("Error loading module manifest: {}", e);
+            return 1;
+        }
+    };
 
-        println!("\nEditing module: {}", manifest.name);
+    // Track if we've made changes
+    let mut dirty = false;
+
+    // Phase 4: Main edit loop - all modifications are in-memory
+    loop {
+        println!("\n=== Editing: {} ===", manifest.name);
         println!("1. Name: {}", manifest.name);
         println!("2. Aliases: {:?}", manifest.aliases);
-        println!("3. Options: {} options", manifest.options.len());
-        println!("q - quit editing");
+        println!("3. Executable: {}", if manifest.executable.is_empty() { "(none - command-only)" } else { &manifest.executable });
+        println!("4. Options: {} option(s)", manifest.options.len());
+        for (i, opt) in manifest.options.iter().enumerate() {
+            println!("   Option {}: flags={:?}, {} command(s)", i + 1, opt.flags, opt.commands.len());
+        }
+        println!("\ns. Save and quit");
+        println!("q. Quit{}", if dirty { " (unsaved changes)" } else { "" });
 
-        print!("\nSelect field to edit (1-3) or 'q' to quit: ");
-        std::io::stdout().flush().unwrap();
+        print!("\nSelect field to edit (1-4), 's' to save, or 'q' to quit: ");
+        if let Err(_) = io::stdout().flush() {
+            continue;
+        }
+
         let mut input = String::new();
-        if std::io::stdin().read_line(&mut input).is_err() {
+        if let Err(_) = io::stdin().read_line(&mut input) {
+            println!("Error reading input");
+            continue;
+        }
+
+        let input = input.trim();
+        match input {
+            "q" => {
+                if dirty {
+                    print!("You have unsaved changes. Save before quitting? [y/n]: ");
+                    if let Err(_) = io::stdout().flush() {
+                        continue;
+                    }
+                    let mut confirm = String::new();
+                    if let Err(_) = io::stdin().read_line(&mut confirm) {
+                        continue;
+                    }
+                    if confirm.trim().eq_ignore_ascii_case("y") {
+                        if let Err(e) = save_manifest(&module_path, &manifest) {
+                            println!("Error saving manifest: {}", e);
+                            continue;
+                        }
+                        println!("Manifest saved successfully.");
+                    }
+                }
+                return 0;
+            }
+            "s" => {
+                if let Err(e) = save_manifest(&module_path, &manifest) {
+                    println!("Error saving manifest: {}", e);
+                    continue;
+                }
+                println!("Manifest saved successfully.");
+
+                // Verify by reloading
+                match ModuleManager::load_manifest(&module_path) {
+                    Ok(verified) => {
+                        if verified.name != manifest.name
+                            || verified.aliases != manifest.aliases
+                            || verified.executable != manifest.executable
+                            || verified.options.len() != manifest.options.len()
+                        {
+                            println!("Warning: Verification failed. The saved file differs from expected.");
+                        } else {
+                            println!("Verification: OK");
+                        }
+                    }
+                    Err(e) => println!("Warning: Could not verify save: {}", e),
+                }
+                return 0;
+            }
+            "1" => {
+                if let Err(e) = edit_name(&mut manifest, &module_path, modules_dir) {
+                    println!("Error: {}", e);
+                } else {
+                    dirty = true;
+                }
+            }
+            "2" => {
+                if let Err(e) = edit_aliases(&mut manifest) {
+                    println!("Error: {}", e);
+                } else {
+                    dirty = true;
+                }
+            }
+            "3" => {
+                if let Err(e) = edit_executable(&mut manifest) {
+                    println!("Error: {}", e);
+                } else {
+                    dirty = true;
+                }
+            }
+            "4" => {
+                if let Err(e) = edit_options(&mut manifest, &module_path) {
+                    println!("Error: {}", e);
+                } else {
+                    dirty = true;
+                }
+            }
+            _ => {
+                println!("Invalid selection");
+            }
+        }
+    }
+}
+
+fn select_module_from_list(modules: &std::collections::HashMap<String, ModuleManifest>) -> Option<String> {
+    loop {
+        println!("\nInstalled modules:");
+        let mut names: Vec<_> = modules.keys().collect();
+        names.sort();
+        for (i, name) in names.iter().enumerate() {
+            println!("  {} - {}", i + 1, name);
+        }
+        println!("  q - quit");
+
+        print!("\nSelect module to edit: ");
+        if let Err(_) = io::stdout().flush() {
+            continue;
+        }
+        let mut input = String::new();
+        if let Err(_) = io::stdin().read_line(&mut input) {
             println!("Error reading input");
             continue;
         }
 
         let input = input.trim();
         if input == "q" {
-            return 0;
+            return None;
         }
 
-        match input {
-            "1" => {
-                print!("New name: ");
-                std::io::stdout().flush().unwrap();
-                let mut new_name = String::new();
-                if std::io::stdin().read_line(&mut new_name).is_err() {
-                    println!("Error reading input");
-                    continue;
+        if let Ok(idx) = input.parse::<usize>() {
+            if idx > 0 && idx <= names.len() {
+                return Some(names[idx - 1].clone());
+            }
+        }
+        println!("Invalid selection");
+    }
+}
+
+fn save_manifest(module_path: &Path, manifest: &ModuleManifest) -> io::Result<()> {
+    ModuleManager::write_manifest(module_path, manifest)
+}
+
+fn edit_name(manifest: &mut ModuleManifest, _module_path: &Path, modules_dir: &Path) -> io::Result<()> {
+    print!("New name [current: {}]: ", manifest.name);
+    if let Err(_) = io::stdout().flush() {
+        return Ok(());
+    }
+
+    let mut input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut input) {
+        return Err(io::Error::new(io::ErrorKind::Other, "Error reading input"));
+    }
+
+    let new_name = input.trim().to_string();
+
+    // Validate: name cannot be empty
+    if new_name.is_empty() {
+        println!("Name cannot be empty. Keeping: {}", manifest.name);
+        return Ok(());
+    }
+
+    if new_name == manifest.name {
+        return Ok(());
+    }
+
+    // Rename the module folder if it exists
+    let old_module_dir = modules_dir.join(&manifest.name);
+    let new_module_dir = modules_dir.join(&new_name);
+
+    if old_module_dir.exists() {
+        if new_module_dir.exists() {
+            println!("Error: a module named '{}' already exists.", new_name);
+            return Ok(());
+        }
+        std::fs::rename(&old_module_dir, &new_module_dir)?;
+    }
+
+    manifest.name = new_name;
+    println!("Name updated.");
+    Ok(())
+}
+
+fn edit_aliases(manifest: &mut ModuleManifest) -> io::Result<()> {
+    let aliases_str = manifest.aliases.join(", ");
+    print!("New aliases (comma-separated) [current: {}]: ", aliases_str);
+    if let Err(_) = io::stdout().flush() {
+        return Ok(());
+    }
+
+    let mut input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut input) {
+        return Err(io::Error::new(io::ErrorKind::Other, "Error reading input"));
+    }
+
+    let input = input.trim();
+    if input.is_empty() {
+        println!("Aliases unchanged.");
+        return Ok(());
+    }
+
+    // Parse comma-separated aliases, trim whitespace
+    let new_aliases: Vec<String> = input
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if new_aliases.is_empty() {
+        println!("No valid aliases provided. Keeping old value.");
+        return Ok(());
+    }
+
+    // Check for duplicates
+    let mut unique = new_aliases.clone();
+    unique.sort();
+    unique.dedup();
+    if unique.len() != new_aliases.len() {
+        println!("Warning: duplicate aliases removed.");
+    }
+
+    manifest.aliases = unique;
+    println!("Aliases updated.");
+    Ok(())
+}
+
+fn edit_executable(manifest: &mut ModuleManifest) -> io::Result<()> {
+    let current = if manifest.executable.is_empty() {
+        "(none - command-only module)".to_string()
+    } else {
+        manifest.executable.clone()
+    };
+    print!("New executable path [current: {}]: ", current);
+    if let Err(_) = io::stdout().flush() {
+        return Ok(());
+    }
+
+    let mut input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut input) {
+        return Err(io::Error::new(io::ErrorKind::Other, "Error reading input"));
+    }
+
+    // Empty is allowed for command-only modules
+    manifest.executable = input.trim().to_string();
+    println!("Executable updated.");
+    Ok(())
+}
+
+fn edit_options(manifest: &mut ModuleManifest, _module_path: &Path) -> io::Result<()> {
+    loop {
+        println!("\n=== Options ===");
+        if manifest.options.is_empty() {
+            println!("No options defined.");
+        } else {
+            for (i, opt) in manifest.options.iter().enumerate() {
+                println!("{}. Flags: {:?}, Commands: {}", i + 1, opt.flags, opt.commands.len());
+                for (j, cmd) in opt.commands.iter().enumerate() {
+                    println!("   {}.{}: {}", i + 1, j + 1, cmd);
                 }
-                let new_name = new_name.trim().to_string();
-                if !new_name.is_empty() {
-                    let module_dir = modules_dir.join(&manifest.name);
-                    let new_module_dir = modules_dir.join(&new_name);
-                    if module_dir.exists() {
-                        if let Err(e) = std::fs::rename(&module_dir, &new_module_dir) {
-                            println!("Error renaming module: {}", e);
-                            continue;
-                        }
+            }
+        }
+        println!("\na. Add new option");
+        if !manifest.options.is_empty() {
+            println!("d. Delete option");
+        }
+        println!("q. Back to main menu");
+
+        let prompt = if manifest.options.is_empty() {
+            "\nSelect action [a/q]: "
+        } else {
+            "\nSelect option (1-{}), 'a' to add, 'd' to delete, 'q' to go back: "
+        };
+        let max_opt = manifest.options.len();
+
+        print!("{}", prompt.replace("{}", &max_opt.to_string()));
+        if let Err(_) = io::stdout().flush() {
+            continue;
+        }
+
+        let mut input = String::new();
+        if let Err(_) = io::stdin().read_line(&mut input) {
+            println!("Error reading input");
+            continue;
+        }
+
+        let input = input.trim();
+        match input {
+            "q" => return Ok(()),
+            "a" => {
+                if let Err(e) = add_option(manifest) {
+                    println!("Error adding option: {}", e);
+                }
+            }
+            "d" => {
+                if manifest.options.len() > 1 {
+                    if let Err(e) = delete_option(manifest) {
+                        println!("Error deleting option: {}", e);
                     }
-                    println!("Name updated to: {}", new_name);
+                } else {
+                    println!("Cannot delete the last option.");
+                }
+            }
+            _ => {
+                if let Ok(idx) = input.parse::<usize>() {
+                    if idx > 0 && idx <= manifest.options.len() {
+                        if let Err(e) = edit_single_option(manifest, idx - 1) {
+                            println!("Error editing option: {}", e);
+                        }
+                    } else {
+                        println!("Invalid selection");
+                    }
+                } else {
+                    // Try to select by flag name
+                    if let Some(opt_idx) = find_option_by_flag(manifest, input) {
+                        if let Err(e) = edit_single_option(manifest, opt_idx) {
+                            println!("Error editing option: {}", e);
+                        }
+                    } else {
+                        println!("Invalid selection. Enter a number (1-{}) or a flag name.", manifest.options.len());
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn find_option_by_flag(manifest: &ModuleManifest, flag_input: &str) -> Option<usize> {
+    for (i, opt) in manifest.options.iter().enumerate() {
+        if opt.flags.iter().any(|f| f == flag_input) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn add_option(manifest: &mut ModuleManifest) -> io::Result<()> {
+    print!("Enter flag name: ");
+    if let Err(_) = io::stdout().flush() {
+        return Ok(());
+    }
+
+    let mut flag_input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut flag_input) {
+        return Err(io::Error::new(io::ErrorKind::Other, "Error reading input"));
+    }
+
+    let flag = flag_input.trim().to_string();
+
+    // Validate: no empty flags
+    if flag.is_empty() {
+        println!("Flag cannot be empty.");
+        return Ok(());
+    }
+
+    // Check for duplicate flags within existing options
+    for opt in &manifest.options {
+        if opt.flags.contains(&flag) {
+            println!("Error: flag '{}' already exists in another option.", flag);
+            return Ok(());
+        }
+    }
+
+    print!("Enter command: ");
+    if let Err(_) = io::stdout().flush() {
+        return Ok(());
+    }
+
+    let mut cmd_input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut cmd_input) {
+        return Err(io::Error::new(io::ErrorKind::Other, "Error reading input"));
+    }
+
+    let command = cmd_input.trim().to_string();
+
+    // Validate: command cannot be empty
+    if command.is_empty() {
+        println!("Command cannot be empty.");
+        return Ok(());
+    }
+
+    // Warn about shell operators
+    let test_commands = vec![command.clone()];
+    if ModuleManager::has_shell_operators(&test_commands) {
+        println!("Warning: command contains shell operators (&&, ||, ;, sudo, &). This may be dangerous.");
+    }
+
+    let new_option = OptionSwitch {
+        flags: vec![flag],
+        _is_default: false,
+        commands: vec![command],
+    };
+
+    manifest.options.push(new_option);
+    println!("Option added.");
+    Ok(())
+}
+
+fn delete_option(manifest: &mut ModuleManifest) -> io::Result<()> {
+    print!("Select option to delete (1-{}): ", manifest.options.len());
+    if let Err(_) = io::stdout().flush() {
+        return Ok(());
+    }
+
+    let mut input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut input) {
+        return Err(io::Error::new(io::ErrorKind::Other, "Error reading input"));
+    }
+
+    if let Ok(idx) = input.trim().parse::<usize>() {
+        if idx > 0 && idx <= manifest.options.len() {
+            manifest.options.remove(idx - 1);
+            println!("Option deleted.");
+        } else {
+            println!("Invalid selection.");
+        }
+    } else {
+        println!("Invalid input.");
+    }
+    Ok(())
+}
+
+fn edit_single_option(manifest: &mut ModuleManifest, opt_idx: usize) -> io::Result<()> {
+    let option = &manifest.options[opt_idx];
+    println!("\n=== Editing Option {} ===", opt_idx + 1);
+    println!("Flags: {:?}", option.flags);
+    println!("Commands: {}", option.commands.len());
+
+    loop {
+        println!("\n1. Edit flags");
+        println!("2. View/edit commands");
+        println!("q. Back to options");
+
+        print!("\nSelect: ");
+        if let Err(_) = io::stdout().flush() {
+            continue;
+        }
+
+        let mut input = String::new();
+        if let Err(_) = io::stdin().read_line(&mut input) {
+            println!("Error reading input");
+            continue;
+        }
+
+        let input = input.trim();
+        match input {
+            "q" => return Ok(()),
+            "1" => {
+                if let Err(e) = edit_option_flags(manifest, opt_idx) {
+                    println!("Error editing flags: {}", e);
                 }
             }
             "2" => {
-                print!("New aliases (comma-separated): ");
-                std::io::stdout().flush().unwrap();
-                let mut new_aliases = String::new();
-                if std::io::stdin().read_line(&mut new_aliases).is_err() {
-                    println!("Error reading input");
-                    continue;
+                if let Err(e) = edit_option_commands(manifest, opt_idx) {
+                    println!("Error editing commands: {}", e);
                 }
-                println!("Aliases updated");
             }
-            "3" => {
-                if manifest.options.is_empty() {
-                    println!("No options to edit.");
+            _ => {
+                println!("Invalid selection");
+            }
+        }
+    }
+}
+
+fn edit_option_flags(manifest: &mut ModuleManifest, opt_idx: usize) -> io::Result<()> {
+    loop {
+        // Get current flags as an owned copy for display and duplicate checking
+        let current_flags: Vec<String> = manifest.options.get(opt_idx)
+            .map(|opt| opt.flags.clone())
+            .unwrap_or_default();
+
+        println!("\nCurrent flags: {:?}", current_flags);
+        println!("a. Add flag");
+        if current_flags.len() > 1 {
+            println!("d. Delete flag");
+        }
+        println!("q. Back");
+
+        print!("\nSelect: ");
+        if let Err(_) = io::stdout().flush() {
+            continue;
+        }
+
+        let mut input = String::new();
+        if let Err(_) = io::stdin().read_line(&mut input) {
+            println!("Error reading input");
+            continue;
+        }
+
+        let input = input.trim();
+        match input {
+            "q" => return Ok(()),
+            "a" => {
+                print!("Enter new flag: ");
+                if let Err(_) = io::stdout().flush() {
                     continue;
                 }
-                for (i, opt) in manifest.options.iter().enumerate() {
-                    println!("\nOption {}:", i + 1);
-                    println!("  Flags: {:?}", opt.flags);
-                    println!("  Commands: {} command(s)", opt.commands.len());
-                    for (j, cmd) in opt.commands.iter().enumerate() {
-                        println!("    {}. {}", j + 1, cmd);
-                    }
+                let mut flag_input = String::new();
+                if let Err(_) = io::stdin().read_line(&mut flag_input) {
+                    continue;
+                }
+                let new_flag = flag_input.trim().to_string();
+
+                if new_flag.is_empty() {
+                    println!("Flag cannot be empty.");
+                    continue;
                 }
 
-                print!("\nSelect option to edit (1-{}), 'a' to add, 'd' to delete, 'q' to quit: ", manifest.options.len());
-                std::io::stdout().flush().unwrap();
-                let mut input_opt = String::new();
-                if std::io::stdin().read_line(&mut input_opt).is_err() {
-                    println!("Error reading input");
+                // Check for duplicate in other options
+                let duplicate_in_other = manifest.options.iter()
+                    .enumerate()
+                    .any(|(i, opt)| i != opt_idx && opt.flags.contains(&new_flag));
+
+                if duplicate_in_other {
+                    println!("Flag '{}' already exists in another option.", new_flag);
                     continue;
                 }
 
-                let input_opt = input_opt.trim();
-                if input_opt == "a" {
-                    print!("Enter flag name: ");
-                    std::io::stdout().flush().unwrap();
-                    let mut flag = String::new();
-                    if std::io::stdin().read_line(&mut flag).is_err() {
-                        println!("Error reading input");
-                        continue;
-                    }
-                    let flag = flag.trim().to_string();
-                    if flag.is_empty() {
-                        println!("Flag cannot be empty.");
-                        continue;
-                    }
-                    print!("Enter command: ");
-                    std::io::stdout().flush().unwrap();
-                    let mut command = String::new();
-                    if std::io::stdin().read_line(&mut command).is_err() {
-                        println!("Error reading input");
-                        continue;
-                    }
-                    let command = command.trim().to_string();
-                    if command.is_empty() {
-                        println!("Command cannot be empty.");
-                        continue;
-                    }
-                    let module_dir = modules_dir.join(&manifest.name);
-                    let manifest_path = module_dir.join("manifest.xml");
-                    if let Some(content) = std::fs::read_to_string(&manifest_path).ok() {
-                        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                        if let Some(end_idx) = lines.iter().position(|l| l.trim().starts_with("</option>")) {
-                            let mut new_lines: Vec<String> = Vec::new();
-                            for (i, line) in lines.iter().enumerate() {
-                                new_lines.push(line.clone());
-                                if i == end_idx {
-                                    new_lines.push(format!("    <option>
-        <flag>{}</flag>
-        <command>{}</command>
-    </option>", flag, command));
-                                }
-                            }
-                            if let Err(e) = std::fs::write(&manifest_path, new_lines.join("\n")) {
-                                println!("Error updating manifest: {}", e);
-                            } else {
-                                println!("Option added successfully.");
-                            }
-                        }
-                    }
+                // Add to this option
+                manifest.options[opt_idx].flags.push(new_flag);
+                println!("Flag added.");
+            }
+            "d" => {
+                if current_flags.len() <= 1 {
+                    println!("Cannot delete the last flag.");
                     continue;
-                } else if input_opt == "d" {
-                    if manifest.options.len() > 1 {
-                        print!("Select option to delete (1-{}): ", manifest.options.len());
-                        std::io::stdout().flush().unwrap();
-                        let mut input_del = String::new();
-                        if std::io::stdin().read_line(&mut input_del).is_err() {
-                            println!("Error reading input");
-                            continue;
-                        }
-                        if let Ok(idx) = input_del.trim().parse::<usize>() {
-                            if idx > 0 && idx <= manifest.options.len() {
-                                let module_dir = modules_dir.join(&manifest.name);
-                                let manifest_path = module_dir.join("manifest.xml");
-                                if let Some(content) = std::fs::read_to_string(&manifest_path).ok() {
-                                    let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                                    let mut skip_start: Option<usize> = None;
-                                    let mut skip_end: Option<usize> = None;
-                                    let mut option_count = 0;
-                                    for (i, line) in lines.iter().enumerate() {
-                                        let trimmed = line.trim();
-                                        if trimmed.starts_with("<option") {
-                                            option_count += 1;
-                                            if option_count == idx {
-                                                skip_start = Some(i);
-                                            }
-                                        } else if trimmed.starts_with("</option>") {
-                                            if option_count == idx {
-                                                skip_end = Some(i);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    if let (Some(start), Some(end)) = (skip_start, skip_end) {
-                                        let new_lines: Vec<String> = lines.iter().enumerate()
-                                            .filter(|(i, _)| *i < start || *i > end)
-                                            .map(|(_, l)| l.clone())
-                                            .collect();
-                                        if let Err(e) = std::fs::write(&manifest_path, new_lines.join("\n")) {
-                                            println!("Error updating manifest: {}", e);
-                                        } else {
-                                            println!("Option deleted successfully.");
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                }
+                print!("Select flag to delete (1-{}): ", current_flags.len());
+                if let Err(_) = io::stdout().flush() {
+                    continue;
+                }
+                let mut del_input = String::new();
+                if let Err(_) = io::stdin().read_line(&mut del_input) {
+                    continue;
+                }
+                if let Ok(idx) = del_input.trim().parse::<usize>() {
+                    if idx > 0 && idx <= current_flags.len() {
+                        manifest.options[opt_idx].flags.remove(idx - 1);
+                        println!("Flag deleted.");
                     } else {
-                        println!("Cannot delete the last option.");
-                    }
-                    continue;
-                } else if input_opt == "q" {
-                    continue;
-                }
-                if let Ok(opt_idx) = input_opt.parse::<usize>() {
-                    if opt_idx > 0 && opt_idx <= manifest.options.len() {
-                        let option = &manifest.options[opt_idx - 1];
-                        println!("\nCommands for option {}:", opt_idx);
-                        for (i, cmd) in option.commands.iter().enumerate() {
-                            println!("  {}: {}", i + 1, cmd);
-                        }
-
-                        print!("\nSelect command to edit (1-{}), 'a' to add, 'd' to delete, 'q' to quit: ", option.commands.len());
-                        std::io::stdout().flush().unwrap();
-                        let mut input_cmd = String::new();
-                        if std::io::stdin().read_line(&mut input_cmd).is_err() {
-                            println!("Error reading input");
-                            continue;
-                        }
-
-                        let input_cmd = input_cmd.trim();
-                        if input_cmd == "q" {
-                            continue;
-                        }
-
-                        let module_dir = modules_dir.join(&manifest.name);
-                        let manifest_path = module_dir.join("manifest.xml");
-
-                        match input_cmd {
-                            "a" => {
-                                print!("Enter new command: ");
-                                std::io::stdout().flush().unwrap();
-                                let mut new_cmd = String::new();
-                                if std::io::stdin().read_line(&mut new_cmd).is_err() {
-                                    println!("Error reading input");
-                                    continue;
-                                }
-                                let new_cmd = new_cmd.trim().to_string();
-                                if !new_cmd.is_empty() {
-                                    if let Some(content) = std::fs::read_to_string(&manifest_path).ok() {
-                                        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                                        let mut option_count = 0;
-                                        let mut in_option = false;
-                                        let mut found_option = false;
-                                        for (i, line) in lines.iter().enumerate() {
-                                            let trimmed = line.trim();
-                                            if trimmed.starts_with("<option") {
-                                                option_count += 1;
-                                                if option_count == opt_idx + 1 {
-                                                    in_option = true;
-                                                }
-                                            } else if trimmed.starts_with("</option>") {
-                                                if in_option && option_count == opt_idx + 1 {
-                                                    let mut new_lines: Vec<String> = Vec::new();
-                                                    for (idx, l) in lines.iter().enumerate() {
-                                                        new_lines.push(l.clone());
-                                                        if idx == i {
-                                                            new_lines.push(format!("        <command>{}</command>", new_cmd));
-                                                        }
-                                                    }
-                                                    if let Err(e) = std::fs::write(&manifest_path, new_lines.join("\n")) {
-                                                        println!("Error updating manifest: {}", e);
-                                                    } else {
-                                                        println!("Command added successfully.");
-                                                    }
-                                                    found_option = true;
-                                                    break;
-                                                }
-                                                in_option = false;
-                                            }
-                                        }
-                                        if !found_option {
-                                            println!("Error: could not find option to add command.");
-                                        }
-                                    }
-                                }
-                            }
-                            "d" => {
-                                print!("Select command to delete (1-{}): ", option.commands.len());
-                                std::io::stdout().flush().unwrap();
-                                let mut input_del = String::new();
-                                if std::io::stdin().read_line(&mut input_del).is_err() {
-                                    println!("Error reading input");
-                                    continue;
-                                }
-                                if let Ok(idx) = input_del.trim().parse::<usize>() {
-                                    if idx > 0 && idx <= option.commands.len() {
-                                        if let Some(content) = std::fs::read_to_string(&manifest_path).ok() {
-                                            let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                                            let mut option_count = 0;
-                                            let mut in_option = false;
-                                            let mut cmd_count = 0;
-                                            let mut to_delete: Vec<usize> = Vec::new();
-                                            for (i, line) in lines.iter().enumerate() {
-                                                let trimmed = line.trim();
-                                                if trimmed.starts_with("<option") {
-                                                    option_count += 1;
-                                                    if option_count == opt_idx + 1 {
-                                                        in_option = true;
-                                                    }
-                                                } else if trimmed.starts_with("</option>") {
-                                                    if in_option && option_count == opt_idx + 1 {
-                                                        break;
-                                                    }
-                                                    in_option = false;
-                                                } else if trimmed.starts_with("<command>") && in_option && option_count == opt_idx + 1 {
-                                                    if cmd_count == idx - 1 {
-                                                        to_delete.push(i);
-                                                        if trimmed.ends_with("</command>") {
-                                                            cmd_count += 1;
-                                                        }
-                                                    } else {
-                                                        if trimmed.ends_with("</command>") {
-                                                            cmd_count += 1;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            if !to_delete.is_empty() {
-                                                let new_lines: Vec<String> = lines.iter().enumerate()
-                                                    .filter(|(i, _)| !to_delete.contains(i))
-                                                    .map(|(_, l)| l.clone())
-                                                    .collect();
-                                                if let Err(e) = std::fs::write(&manifest_path, new_lines.join("\n")) {
-                                                    println!("Error updating manifest: {}", e);
-                                                } else {
-                                                    println!("Command deleted successfully.");
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                if let Ok(cmd_idx) = input_cmd.parse::<usize>() {
-                                    if cmd_idx > 0 && cmd_idx <= option.commands.len() {
-                                        print!("Enter new command (old: {}): ", option.commands[cmd_idx - 1]);
-                                        std::io::stdout().flush().unwrap();
-                                        let mut new_cmd = String::new();
-                                        if std::io::stdin().read_line(&mut new_cmd).is_err() {
-                                            println!("Error reading input");
-                                            continue;
-                                        }
-                                        let new_cmd = new_cmd.trim().to_string();
-                                        if !new_cmd.is_empty() {
-                                            if let Some(content) = std::fs::read_to_string(&manifest_path).ok() {
-                                                let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                                                let mut option_count = 0;
-                                                let mut in_option = false;
-                                                let mut cmd_count = 0;
-                                                let mut to_update: Vec<usize> = Vec::new();
-                                                for (i, line) in lines.iter().enumerate() {
-                                                    let trimmed = line.trim();
-                                                    if trimmed.starts_with("<option") {
-                                                        option_count += 1;
-                                                        if option_count == opt_idx + 1 {
-                                                            in_option = true;
-                                                        }
-                                                    } else if trimmed.starts_with("</option>") {
-                                                        if in_option && option_count == opt_idx + 1 {
-                                                            break;
-                                                        }
-                                                        in_option = false;
-                                                    } else if trimmed.starts_with("<command>") && in_option && option_count == opt_idx + 1 {
-                                                        if cmd_count == cmd_idx - 1 {
-                                                            to_update.push(i);
-                                                            if trimmed.ends_with("</command>") {
-                                                                cmd_count += 1;
-                                                            }
-                                                        } else {
-                                                            if trimmed.ends_with("</command>") {
-                                                                cmd_count += 1;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                if !to_update.is_empty() {
-                                                    let mut new_lines: Vec<String> = Vec::new();
-                                                    for (i, line) in lines.iter().enumerate() {
-                                                        if to_update.contains(&i) && !to_update.contains(&(i + 1)) {
-                                                            new_lines.push(format!("        <command>{}</command>", new_cmd));
-                                                        } else {
-                                                            new_lines.push(line.clone());
-                                                        }
-                                                    }
-                                                    if let Err(e) = std::fs::write(&manifest_path, new_lines.join("\n")) {
-                                                        println!("Error updating manifest: {}", e);
-                                                    } else {
-                                                        println!("Command updated successfully.");
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        println!("Invalid selection.");
                     }
                 }
             }
             _ => {
                 println!("Invalid selection");
+            }
+        }
+    }
+}
+
+fn edit_option_commands(manifest: &mut ModuleManifest, opt_idx: usize) -> io::Result<()> {
+    let option = &mut manifest.options[opt_idx];
+
+    loop {
+        println!("\nCommands for option {}:", opt_idx + 1);
+        if option.commands.is_empty() {
+            println!("  (no commands)");
+        } else {
+            for (i, cmd) in option.commands.iter().enumerate() {
+                println!("  {}. {}", i + 1, cmd);
+            }
+        }
+        println!("\na. Add command");
+        if !option.commands.is_empty() {
+            println!("d. Delete command");
+        }
+        println!("q. Back");
+
+        print!("\nSelect: ");
+        if let Err(_) = io::stdout().flush() {
+            continue;
+        }
+
+        let mut input = String::new();
+        if let Err(_) = io::stdin().read_line(&mut input) {
+            println!("Error reading input");
+            continue;
+        }
+
+        let input = input.trim();
+        match input {
+            "q" => return Ok(()),
+            "a" => {
+                print!("Enter new command: ");
+                if let Err(_) = io::stdout().flush() {
+                    continue;
+                }
+                let mut cmd_input = String::new();
+                if let Err(_) = io::stdin().read_line(&mut cmd_input) {
+                    continue;
+                }
+                let new_cmd = cmd_input.trim().to_string();
+
+                if new_cmd.is_empty() {
+                    println!("Command cannot be empty.");
+                    continue;
+                }
+
+                // Warn about shell operators
+                let test_commands = vec![new_cmd.clone()];
+                if ModuleManager::has_shell_operators(&test_commands) {
+                    println!("Warning: command contains shell operators (&&, ||, ;, sudo, &). This may be dangerous.");
+                }
+
+                option.commands.push(new_cmd);
+                println!("Command added.");
+            }
+            "d" => {
+                if option.commands.is_empty() {
+                    println!("No commands to delete.");
+                    continue;
+                }
+                print!("Select command to delete (1-{}): ", option.commands.len());
+                if let Err(_) = io::stdout().flush() {
+                    continue;
+                }
+                let mut del_input = String::new();
+                if let Err(_) = io::stdin().read_line(&mut del_input) {
+                    continue;
+                }
+                if let Ok(idx) = del_input.trim().parse::<usize>() {
+                    if idx > 0 && idx <= option.commands.len() {
+                        option.commands.remove(idx - 1);
+                        println!("Command deleted.");
+                    } else {
+                        println!("Invalid selection.");
+                    }
+                }
+            }
+            _ => {
+                // Try to edit a specific command
+                if let Ok(cmd_idx) = input.parse::<usize>() {
+                    if cmd_idx > 0 && cmd_idx <= option.commands.len() {
+                        let old_cmd = &option.commands[cmd_idx - 1];
+                        print!("Enter new command [old: {}]: ", old_cmd);
+                        if let Err(_) = io::stdout().flush() {
+                            continue;
+                        }
+                        let mut new_cmd_input = String::new();
+                        if let Err(_) = io::stdin().read_line(&mut new_cmd_input) {
+                            continue;
+                        }
+                        let new_cmd = new_cmd_input.trim().to_string();
+
+                        if new_cmd.is_empty() {
+                            println!("Command unchanged.");
+                            continue;
+                        }
+
+                        // Warn about shell operators
+                        let test_commands = vec![new_cmd.clone()];
+                        if ModuleManager::has_shell_operators(&test_commands) {
+                            println!("Warning: command contains shell operators (&&, ||, ;, sudo, &). This may be dangerous.");
+                        }
+
+                        option.commands[cmd_idx - 1] = new_cmd;
+                        println!("Command updated.");
+                    } else {
+                        println!("Invalid selection.");
+                    }
+                } else {
+                    println!("Invalid selection. Enter a number, 'a', 'd', or 'q'.");
+                }
             }
         }
     }
