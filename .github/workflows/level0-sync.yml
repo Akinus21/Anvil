@@ -2,8 +2,6 @@ name: Level 0 — Sync from Template
 run-name: "⟳ Sync workflows from template"
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
