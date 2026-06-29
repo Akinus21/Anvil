@@ -24,6 +24,7 @@ env:
   DEVOPS_BRANCH:         ${{ vars.DEVOPS_BRANCH || 'devops' }}
   MAIN_BRANCH:           ${{ vars.MAIN_BRANCH || 'main' }}
   OPENCODE_MODEL:        ${{ vars.OPENCODE_MODEL || '' }}
+  CONTAINER_IMAGE:     ${{ vars.CONTAINER_IMAGE || '' }}
   GITHUB_SERVER_URL:     ${{ github.server_url }}
   GITHUB_REPOSITORY:     ${{ github.repository }}
 
@@ -34,6 +35,7 @@ concurrency:
 jobs:
   build-iterate:
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -192,6 +194,7 @@ jobs:
     needs: build-iterate
     if: needs.build-iterate.result == 'success'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - name: Open PR devops -> main
         env:
@@ -234,6 +237,7 @@ jobs:
     needs: create-pr
     if: needs.create-pr.result == 'success'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:

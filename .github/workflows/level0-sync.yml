@@ -9,12 +9,14 @@ on:
 jobs:
   sync-workflows:
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     if: |
       github.event_name == 'workflow_dispatch' ||
       !contains(github.event.head_commit.message, '[release-bot-skip]')
     env:
       PLATFORM:       ${{ vars.PLATFORM || 'github' }}
       RUNNER_LABEL:  ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+      CONTAINER_IMAGE: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - name: Checkout current repo
         uses: actions/checkout@v4

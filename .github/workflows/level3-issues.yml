@@ -33,6 +33,7 @@ env:
   GITHUB_SERVER_URL:     ${{ github.server_url }}
   GITHUB_REPOSITORY:     ${{ github.repository }}
   OPENCODE_MODEL:        ${{ vars.OPENCODE_MODEL || '' }}
+  CONTAINER_IMAGE:     ${{ vars.CONTAINER_IMAGE || '' }}
 
 concurrency:
   # Group per-issue so label/comment/edit activity for the same issue
@@ -51,6 +52,7 @@ jobs:
   label_check:
     if: github.event_name == 'issues'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     outputs:
       relevant: ${{ steps.check.outputs.relevant }}
     steps:
@@ -99,6 +101,7 @@ jobs:
     needs: label_check
     if: github.event_name == 'issues' && needs.label_check.outputs.relevant == 'true'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     outputs:
       action: ${{ steps.parse.outputs.action }}
       branch_name: ${{ steps.parse.outputs.branch_name }}
@@ -271,6 +274,7 @@ jobs:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'comment'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - name: Acknowledge
         env:
@@ -287,6 +291,7 @@ jobs:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'skip'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - name: Post skip reason
         env:
@@ -320,6 +325,7 @@ jobs:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'fix'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -581,6 +587,7 @@ jobs:
   build-iterate:
     if: github.event_name == 'push'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -739,6 +746,7 @@ jobs:
     needs: build-iterate
     if: github.event_name == 'push' && needs.build-iterate.result == 'success'
     runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
+    container: ${{ vars.CONTAINER_IMAGE || '' }}
     steps:
       - name: Open PR issue-N -> devops
         env:
