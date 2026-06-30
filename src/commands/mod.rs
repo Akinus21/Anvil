@@ -2,6 +2,7 @@ pub mod add;
 pub mod build_command;
 pub mod edit;
 pub mod edit_aliases;
+pub mod edit_tui;
 pub mod list;
 pub mod rm;
 pub mod update;

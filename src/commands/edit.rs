@@ -4,142 +4,148 @@ use std::path::Path;
 use crate::modules::{ModuleManager, ModuleManifest, OptionSwitch};
 
 pub fn execute(modules_dir: &Path, _registry_path: &Path, module_name: Option<String>) -> i32 {
-    // Phase 1: Load the module list for selection
-    let modules = match ModuleManager::scan_modules(modules_dir) {
-        Ok(m) => m,
-        Err(e) => {
-            println!("Error scanning modules: {}", e);
-            return 1;
-        }
-    };
-
-    // Phase 2: Select which module to edit
-    let selected_name = if let Some(name) = module_name {
-        if !modules.contains_key(&name) {
-            println!("Error: module '{}' not found", name);
-            return 1;
-        }
-        name
+    if std::io::IsTerminal::is_terminal(&std::io::stdin())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout())
+    {
+        crate::commands::edit_tui::run(modules_dir, module_name)
     } else {
-        match select_module_from_list(&modules) {
-            Some(name) => name,
-            None => return 0,
-        }
-    };
+        // Phase 1: Load the module list for selection
+        let modules = match ModuleManager::scan_modules(modules_dir) {
+            Ok(m) => m,
+            Err(e) => {
+                println!("Error scanning modules: {}", e);
+                return 1;
+            }
+        };
 
-    // Phase 3: Load the manifest ONCE into memory
-    let module_path = modules_dir.join(&selected_name);
-    let mut manifest = match ModuleManager::load_manifest(&module_path) {
-        Ok(m) => m,
-        Err(e) => {
-            println!("Error loading module manifest: {}", e);
-            return 1;
-        }
-    };
+        // Phase 2: Select which module to edit
+        let selected_name = if let Some(name) = module_name {
+            if !modules.contains_key(&name) {
+                println!("Error: module '{}' not found", name);
+                return 1;
+            }
+            name
+        } else {
+            match select_module_from_list(&modules) {
+                Some(name) => name,
+                None => return 0,
+            }
+        };
 
-    // Track if we've made changes
-    let mut dirty = false;
+        // Phase 3: Load the manifest ONCE into memory
+        let module_path = modules_dir.join(&selected_name);
+        let mut manifest = match ModuleManager::load_manifest(&module_path) {
+            Ok(m) => m,
+            Err(e) => {
+                println!("Error loading module manifest: {}", e);
+                return 1;
+            }
+        };
 
-    // Phase 4: Main edit loop - all modifications are in-memory
-    loop {
-        println!("\n=== Editing: {} ===", manifest.name);
-        println!("1. Name: {}", manifest.name);
-        println!("2. Aliases: {:?}", manifest.aliases);
-        println!("3. Executable: {}", if manifest.executable.is_empty() { "(none - command-only)" } else { &manifest.executable });
-        println!("4. Options: {} option(s)", manifest.options.len());
-        for (i, opt) in manifest.options.iter().enumerate() {
-            println!("   Option {}: flags={:?}, {} command(s)", i + 1, opt.flags, opt.commands.len());
-        }
-        println!("\ns. Save and quit");
-        println!("q. Quit{}", if dirty { " (unsaved changes)" } else { "" });
+        // Track if we've made changes
+        let mut dirty = false;
 
-        print!("\nSelect field to edit (1-4), 's' to save, or 'q' to quit: ");
-        if let Err(_) = io::stdout().flush() {
-            continue;
-        }
+        // Phase 4: Main edit loop - all modifications are in-memory
+        loop {
+            println!("\n=== Editing: {} ===", manifest.name);
+            println!("1. Name: {}", manifest.name);
+            println!("2. Aliases: {:?}", manifest.aliases);
+            println!("3. Executable: {}", if manifest.executable.is_empty() { "(none - command-only)" } else { &manifest.executable });
+            println!("4. Options: {} option(s)", manifest.options.len());
+            for (i, opt) in manifest.options.iter().enumerate() {
+                println!("   Option {}: flags={:?}, {} command(s)", i + 1, opt.flags, opt.commands.len());
+            }
+            println!("\ns. Save and quit");
+            println!("q. Quit{}", if dirty { " (unsaved changes)" } else { "" });
 
-        let mut input = String::new();
-        if let Err(_) = io::stdin().read_line(&mut input) {
-            println!("Error reading input");
-            continue;
-        }
+            print!("\nSelect field to edit (1-4), 's' to save, or 'q' to quit: ");
+            if let Err(_) = io::stdout().flush() {
+                continue;
+            }
 
-        let input = input.trim();
-        match input {
-            "q" => {
-                if dirty {
-                    print!("You have unsaved changes. Save before quitting? [y/n]: ");
-                    if let Err(_) = io::stdout().flush() {
-                        continue;
-                    }
-                    let mut confirm = String::new();
-                    if let Err(_) = io::stdin().read_line(&mut confirm) {
-                        continue;
-                    }
-                    if confirm.trim().eq_ignore_ascii_case("y") {
-                        if let Err(e) = save_manifest(&module_path, &manifest) {
-                            println!("Error saving manifest: {}", e);
+            let mut input = String::new();
+            if let Err(_) = io::stdin().read_line(&mut input) {
+                println!("Error reading input");
+                continue;
+            }
+
+            let input = input.trim();
+            match input {
+                "q" => {
+                    if dirty {
+                        print!("You have unsaved changes. Save before quitting? [y/n]: ");
+                        if let Err(_) = io::stdout().flush() {
                             continue;
                         }
-                        println!("Manifest saved successfully.");
-                    }
-                }
-                return 0;
-            }
-            "s" => {
-                if let Err(e) = save_manifest(&module_path, &manifest) {
-                    println!("Error saving manifest: {}", e);
-                    continue;
-                }
-                println!("Manifest saved successfully.");
-
-                // Verify by reloading
-                match ModuleManager::load_manifest(&module_path) {
-                    Ok(verified) => {
-                        if verified.name != manifest.name
-                            || verified.aliases != manifest.aliases
-                            || verified.executable != manifest.executable
-                            || verified.options.len() != manifest.options.len()
-                        {
-                            println!("Warning: Verification failed. The saved file differs from expected.");
-                        } else {
-                            println!("Verification: OK");
+                        let mut confirm = String::new();
+                        if let Err(_) = io::stdin().read_line(&mut confirm) {
+                            continue;
+                        }
+                        if confirm.trim().eq_ignore_ascii_case("y") {
+                            if let Err(e) = save_manifest(&module_path, &manifest) {
+                                println!("Error saving manifest: {}", e);
+                                continue;
+                            }
+                            println!("Manifest saved successfully.");
                         }
                     }
-                    Err(e) => println!("Warning: Could not verify save: {}", e),
+                    return 0;
                 }
-                return 0;
-            }
-            "1" => {
-                if let Err(e) = edit_name(&mut manifest, &module_path, modules_dir) {
-                    println!("Error: {}", e);
-                } else {
-                    dirty = true;
+                "s" => {
+                    if let Err(e) = save_manifest(&module_path, &manifest) {
+                        println!("Error saving manifest: {}", e);
+                        continue;
+                    }
+                    println!("Manifest saved successfully.");
+
+                    // Verify by reloading
+                    match ModuleManager::load_manifest(&module_path) {
+                        Ok(verified) => {
+                            if verified.name != manifest.name
+                                || verified.aliases != manifest.aliases
+                                || verified.executable != manifest.executable
+                                || verified.options.len() != manifest.options.len()
+                            {
+                                println!("Warning: Verification failed. The saved file differs from expected.");
+                            } else {
+                                println!("Verification: OK");
+                            }
+                        }
+                        Err(e) => println!("Warning: Could not verify save: {}", e),
+                    }
+                    return 0;
                 }
-            }
-            "2" => {
-                if let Err(e) = edit_aliases(&mut manifest) {
-                    println!("Error: {}", e);
-                } else {
-                    dirty = true;
+                "1" => {
+                    if let Err(e) = edit_name(&mut manifest, &module_path, modules_dir) {
+                        println!("Error: {}", e);
+                    } else {
+                        dirty = true;
+                    }
                 }
-            }
-            "3" => {
-                if let Err(e) = edit_executable(&mut manifest) {
-                    println!("Error: {}", e);
-                } else {
-                    dirty = true;
+                "2" => {
+                    if let Err(e) = edit_aliases(&mut manifest) {
+                        println!("Error: {}", e);
+                    } else {
+                        dirty = true;
+                    }
                 }
-            }
-            "4" => {
-                if let Err(e) = edit_options(&mut manifest, &module_path) {
-                    println!("Error: {}", e);
-                } else {
-                    dirty = true;
+                "3" => {
+                    if let Err(e) = edit_executable(&mut manifest) {
+                        println!("Error: {}", e);
+                    } else {
+                        dirty = true;
+                    }
                 }
-            }
-            _ => {
-                println!("Invalid selection");
+                "4" => {
+                    if let Err(e) = edit_options(&mut manifest, &module_path) {
+                        println!("Error: {}", e);
+                    } else {
+                        dirty = true;
+                    }
+                }
+                _ => {
+                    println!("Invalid selection");
+                }
             }
         }
     }
