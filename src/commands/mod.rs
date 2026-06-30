@@ -4,6 +4,7 @@ pub mod completions;
 pub mod edit;
 pub mod edit_aliases;
 pub mod edit_tui;
+pub mod help_cmd;
 pub mod list;
 pub mod rm;
 pub mod update;

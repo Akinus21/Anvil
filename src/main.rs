@@ -5,7 +5,7 @@ mod commands;
 mod modules;
 mod registry;
 
-use commands::{add, build_command, completions, edit, edit_aliases, list, rm, update, doctor, run, completion, repos, autoupdate, upgrade};
+use commands::{add, build_command, completions, edit, edit_aliases, list, rm, update, doctor, run, completion, repos, autoupdate, upgrade, help_cmd};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -97,27 +97,7 @@ fn main() {
             let no_fix = args.args.iter().any(|a| a == "--no-fix" || a == "--dry-run");
             doctor::execute(&config_dir, &modules_dir, no_fix)
         }
-        Some("help") => {
-            println!("AKTools - Modular CLI tool runner\n");
-            println!("Commands:");
-            println!("  aktools build-command   Create a new command module interactively");
-            println!("  aktools add <file>     Add a script as a module");
-            println!("  aktools edit [name]    Edit a module's manifest");
-            println!("  aktools edit-aliases   Edit aliases interactively");
-            println!("  aktools list           List installed modules");
-            println!("  aktools rm <name>      Remove a module");
-            println!("  aktools update         Rebuild the registry");
-            println!("  aktools doctor         Diagnose and auto-fix issues");
-            println!("  aktools completion     Generate shell completions");
-            println!("  aktools add-repo       Add a GitHub repo to track");
-            println!("  aktools list-repos     List configured repos");
-            println!("  aktools search-mods    Search modules in repos");
-            println!("  aktools install-mods   Install modules from repos");
-            println!("  aktools add-mod        Submit module to community repo");
-            println!("  aktools autoupdate     Manage automatic updates");
-            println!("  aktools <module> [args...]  Run a module");
-            0
-        }
+        Some("help") => help_cmd::execute(&modules_dir, &registry_path, &args.args),
         Some(module_name) => run::execute(&modules_dir, &registry_path, module_name, args.args),
         None => {
             println!("AKTools - Modular CLI tool runner\n");
