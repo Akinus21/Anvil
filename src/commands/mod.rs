@@ -1,5 +1,6 @@
 pub mod add;
 pub mod build_command;
+pub mod completions;
 pub mod edit;
 pub mod edit_aliases;
 pub mod edit_tui;

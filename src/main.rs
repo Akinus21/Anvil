@@ -5,7 +5,7 @@ mod commands;
 mod modules;
 mod registry;
 
-use commands::{add, build_command, edit, edit_aliases, list, rm, update, doctor, run, completion, repos, autoupdate, upgrade};
+use commands::{add, build_command, completions, edit, edit_aliases, list, rm, update, doctor, run, completion, repos, autoupdate, upgrade};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -62,6 +62,24 @@ fn main() {
         Some("add") => add::execute(&config_dir, &modules_dir, &registry_path, &args.args),
         Some("edit") => edit::execute(&modules_dir, &registry_path, args.args.first().cloned()),
         Some("edit-aliases") | Some("edit_aliases") => edit_aliases::execute(&config_dir),
+        Some("completions") => {
+            let shell = args.args.first().map(|s| s.as_str()).unwrap_or("bash");
+            match completions::execute(shell) {
+                Ok(script) => {
+                    println!("{}", script);
+                    0
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    1
+                }
+            }
+        }
+        Some("_compdata") => {
+            // Internal command for completion scripts
+            println!("{}", completions::execute_compdata(&modules_dir, &registry_path));
+            0
+        }
         Some("completion") => completion::execute(&config_dir, args.args.clone()),
         Some("add-repo") => repos::execute(&config_dir, vec!["add-repo".to_string()].into_iter().chain(args.args.clone()).collect()),
         Some("list-repos") => repos::execute(&config_dir, vec!["list-repos".to_string()].into_iter().chain(args.args.clone()).collect()),
