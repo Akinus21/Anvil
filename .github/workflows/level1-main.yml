@@ -45,7 +45,6 @@ env:
   BREW_TAP_BRANCH:       ${{ vars.BREW_TAP_BRANCH || 'main' }}
   SOURCE_BIN_NAME:       ${{ vars.SOURCE_BIN_NAME || '' }}
   OPENCODE_MODEL:        ${{ vars.OPENCODE_MODEL || '' }}
-  CONTAINER_IMAGE:     ${{ vars.CONTAINER_IMAGE || '' }}
   GITHUB_SERVER_URL:     ${{ github.server_url }}
   GITHUB_REPOSITORY:     ${{ github.repository }}
 
@@ -60,8 +59,8 @@ jobs:
   # build/release commands through the same source of truth.
   # ============================================================
   detect:
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       language:    ${{ steps.det.outputs.language }}
       bin_name:    ${{ steps.det.outputs.bin_name }}
@@ -148,8 +147,8 @@ jobs:
   build-iterate:
     needs: detect
     if: contains(github.event.head_commit.message, '[release-bot-skip]') == false
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -302,8 +301,8 @@ jobs:
       needs.build-iterate.result == 'success' &&
       contains(github.event.head_commit.message, '[release-bot-skip]') == false &&
       needs.detect.outputs.language != 'other'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       version:    ${{ steps.bump.outputs.version }}
       asset_url:  ${{ steps.upload.outputs.asset_url }}
@@ -589,8 +588,8 @@ jobs:
     if: |
       needs.release.result == 'success' &&
       contains('rust go', needs.detect.outputs.language)
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       x86_64_linux_sha: ${{ steps.bottle_x86.outputs.sha256 }}
       arm64_linux_sha:  ${{ steps.bottle_arm64.outputs.sha256 }}
@@ -788,8 +787,8 @@ jobs:
       needs.release.result == 'success' &&
       needs.bottles.result == 'success' &&
       vars.BREW_TAP_ENABLED == 'true'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       rendered: ${{ steps.render.outputs.rendered }}
     steps:
@@ -956,8 +955,8 @@ jobs:
     if: |
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
       (needs.bottles.result == 'success' || needs.bottles.result == 'skipped')
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - name: Delete orphaned issue branches + toggle stale labels
         env:
