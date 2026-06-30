@@ -64,7 +64,11 @@ pub fn execute(shell: &str) -> Result<String, String> {
 }
 
 /// Get a parseable list of modules with their flags for shell scripts
-/// Output format: "module:flag1,flag2,flag3|..."
+/// Output format: Each module on its own line with : always present
+/// Example:
+///   module1:flag1,flag2
+///   module2:
+///   module3:flag1
 pub fn get_modules_with_flags(modules_dir: &Path, registry_path: &Path) -> String {
     let registry = match Registry::load(registry_path) {
         Ok(r) => r,
@@ -87,34 +91,34 @@ pub fn get_modules_with_flags(modules_dir: &Path, registry_path: &Path) -> Strin
             .filter_map(|opt| opt.flags.get(0).cloned())
             .collect();
 
-        if flags.is_empty() {
-            results.push(name.clone());
-        } else {
-            results.push(format!("{}:{}", name, flags.join(",")));
-        }
+        // Always include the colon - empty flags means "module:" not "module"
+        results.push(format!("{}:{}", name, flags.join(",")));
     }
 
-    results.join("|")
+    results.join("\n")
 }
 
 fn generate_bash_completion() -> String {
     let commands = "run add edit rm list update doctor help build-command edit-aliases completion add-repo list-repos search-mods install-mods add-mod update-mod inspect-mod autoupdate upgrade";
     
     format!(r#"# aktools bash completion
+# Note: For large module sets, cache completion data by adding a timestamp check
 
 _aktools() {{
-    local cur prev opts
+    local cur prev prev2 opts
     COMPREPLY=()
     cur="{{{{COMP_WORDS[COMP_CWORD]}}}}"
     prev="{{{{COMP_WORDS[COMP_CWORD-1]}}}}"
     prev2="{{{{COMP_WORDS[COMP_CWORD-2]}}}}"
     opts="{commands}"
 
-    # Get module names and flags
+    # Get module data - each line is "module:flags" or "module:" for no flags
     local modules_data
     modules_data=$(aktools _compdata 2>/dev/null || echo "")
+
+    # Extract module names (everything before the first colon on each line)
     local module_names
-    module_names=$(echo "$modules_data" | cut -d'|' -f1 | tr ' ' '\n' | grep -v '^$' | sort | uniq)
+    module_names=$(echo "$modules_data" | cut -d':' -f1 | grep -v '^$' | sort | uniq)
 
     case "${{prev}}" in
         run|edit|rm|inspect-mod)
@@ -126,10 +130,12 @@ _aktools() {{
         *)
             # Check if previous word is a module name for flag completion
             if echo "${{module_names}}" | grep -q "^${{prev}}$"; then
-                # Get flags for this module
+                # Get flags for this module (everything after the colon)
                 local mod_flags
                 mod_flags=$(echo "$modules_data" | grep "^${{prev}}:" | cut -d':' -f2 | tr ',' ' ')
-                COMPREPLY=($(compgen -W "${{mod_flags}}" -- "${{cur}}"))
+                if [[ -n "$mod_flags" ]]; then
+                    COMPREPLY=($(compgen -W "${{mod_flags}}" -- "${{cur}}"))
+                fi
             else
                 COMPREPLY=($(compgen -W "${{opts}}" -- "${{cur}}"))
             fi
@@ -164,6 +170,7 @@ fn generate_zsh_completion() -> String {
     let upgrade_targets = "'aktools' 'modules' 'all'";
 
     format!(r#"# aktools zsh completion
+# Note: For large module sets, cache completion data by adding a timestamp check
 
 _aktools() {{
     local -a commands modules upgrade_opts
@@ -175,11 +182,12 @@ _aktools() {{
         return
     fi
 
-    # Get module data
+    # Get module data - each line is "module:flags" or "module:" for no flags
     local modules_data
     modules_data=$(aktools _compdata 2>/dev/null)
     local -a module_list
-    module_list=($(echo "$modules_data" | cut -d'|' -f1 | tr ' ' '\n' | grep -v '^$'))
+    # Extract module names (first field before colon)
+    module_list=($(echo "$modules_data" | cut -d':' -f1 | grep -v '^$'))
 
     case "${{words[2]}}" in
         run|edit|rm|inspect-mod)
@@ -209,9 +217,10 @@ _aktools "$@"
 
 fn generate_fish_completion() -> String {
     let script = r#"# aktools fish completion
+# Note: For large module sets, cache completion data by adding a timestamp check
 
 function __aktools_modules
-    aktools _compdata 2>/dev/null | cut -d'|' -f1 | tr ' ' '\n' | grep -v '^$'
+    aktools _compdata 2>/dev/null | cut -d':' -f1 | grep -v '^$'
 end
 
 function __aktools_module_flags
@@ -255,19 +264,38 @@ complete -c aktools -n '__fish_seen_subcommand_from run edit rm' -f -a '(__aktoo
 
 fn generate_powershell_completion() -> String {
     let script = r#"# aktools powershell completion
+# Note: For large module sets, cache completion data by adding a timestamp check
 
-$script:AktoolsModules = $null
+$script:AktoolsCompData = $null
 
-function Get-AktoolsModules {
-    $script:AktoolsModules = @(aktools _compdata 2>$null | ForEach-Object { ($_ -split '\|')[0] -split ' ' } | Where-Object { $_ })
+function Get-AktoolsCompData {
+    if ($script:AktoolsCompData -eq $null) {
+        $script:AktoolsCompData = aktools _compdata 2>$null
+    }
+    return $script:AktoolsCompData
+}
+
+function Get-AktoolsModuleNames {
+    $data = Get-AktoolsCompData
+    if (-not $data) { return @() }
+    $names = @()
+    foreach ($line in $data -split "`n") {
+        if ($line -match '^([^:]+):') {
+            $names += $matches[1]
+        }
+    }
+    return $names | Sort-Object -Unique
 }
 
 function Get-AktoolsModuleFlags {
     param([string]$Module)
-    if (-not $script:AktoolsModules) { Get-AktoolsModules }
-    $line = aktools _compdata 2>$null | Where-Object { $_ -match "^$Module:" }
-    if ($line -match ':(.+)') {
-        return ($matches[1] -split ',').Trim()
+    $data = Get-AktoolsCompData
+    if (-not $data) { return @() }
+    foreach ($line in $data -split "`n") {
+        if ($line -match "^$Module`:(.+)") {
+            $flags = $matches[1] -split ','
+            return $flags | Where-Object { $_ }
+        }
     }
     return @()
 }
@@ -281,6 +309,7 @@ $moduleCommands = @('run', 'edit', 'rm', 'inspect-mod')
 
 Register-ArgumentCompleter -CommandName aktools -ParameterName Command -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
+    $script:AktoolsCompData = $null  # Reset cache on each completion
     $wordToComplete | ForEach-Object { $_ } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
@@ -288,8 +317,9 @@ Register-ArgumentCompleter -CommandName aktools -ParameterName Command -ScriptBl
 
 Register-ArgumentCompleter -CommandName aktools -ParameterName ModuleName -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    if (-not $script:AktoolsModules) { Get-AktoolsModules }
-    $script:AktoolsModules | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+    $script:AktoolsCompData = $null  # Reset cache on each completion
+    $names = Get-AktoolsModuleNames
+    $names | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
 }
@@ -298,37 +328,21 @@ Register-ArgumentCompleter -CommandName aktools -ParameterName ModuleName -Scrip
 }
 
 fn generate_elvish_completion() -> String {
+    // Elvish completion requires proper edit:completion hook integration.
+    // The edit:completion:arg-completer[cmd] = @args { } API requires implementing
+    // a candidate function that returns completions based on command args.
+    // This is not yet implemented - elvish users can use the aktools help command
+    // or manually specify module names and flags.
     let script = r#"# aktools elvish completion
-
-use runtime
-
-set:& aktools-commands = [
-    run add edit rm list update doctor help build-command edit-aliases completion
-    add-repo list-repos search-mods install-mods add-mod update-mod inspect-mod
-    autoupdate upgrade
-]
-
-set:& aktools-module-commands = [run edit rm inspect-mod]
-
-fn get-aktools-modules {
-    aktools _compdata 2>/dev/null | splits '|' | get 0 | splits ' '
-}
-
-fn get-aktools-flags {|module|
-    aktools _compdata 2>/dev/null | grep $module | splits ':' | get 1 | splits ','
-}
-
-set:& comp-posthooks = [
-    $@module in $aktools-module-commands {
-        candidates [ (get-aktools-modules) ]
-    }
-]
+# NOT YET SUPPORTED - Elvish completion requires implementation of
+# edit:completion:arg-completer[aktools] using the edit:completion hook system.
+# See: https://elv.sh/ref/command.html#editcompletion
 "#;
     script.to_string()
 }
 
 /// Internal command to output completion data for shell scripts
-/// Returns module data in format: "module1 module2|module1:flag1,flag2|module2:flag1"
+/// Returns module data in format: "module1:flag1,flag2\nmodule2:\nmodule3:flag1"
 pub fn execute_compdata(modules_dir: &Path, registry_path: &Path) -> String {
     get_modules_with_flags(modules_dir, registry_path)
 }
@@ -356,7 +370,7 @@ mod tests {
         assert!(ps.contains("Register-ArgumentCompleter"));
 
         let elvish = generate_elvish_completion();
-        assert!(elvish.contains("aktools-commands"));
+        assert!(elvish.contains("NOT YET SUPPORTED"));
     }
 
     #[test]
