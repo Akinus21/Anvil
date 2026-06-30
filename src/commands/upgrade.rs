@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::fs;
 
-const DEFAULT_COMMUNITY_REPO: &str = "Akinus21/aktools-modules";
+const DEFAULT_COMMUNITY_REPO: &str = "Akinus21/Anvil-modules";
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct RepoConfig {
@@ -31,7 +31,7 @@ struct RegistryModule {
     repository: Option<String>,
     description: Option<String>,
     tags: Option<Vec<String>>,
-    min_aktools_version: Option<String>,
+    min_anvil_version: Option<String>,
     last_updated: Option<String>,
 }
 
@@ -39,33 +39,33 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
     let subcommand = args.first().map(|s| s.as_str()).unwrap_or("all");
 
     match subcommand {
-        "aktools" | "self" => upgrade_aktools(),
+        "anvil" | "self" => upgrade_anvil(),
         "modules" | "mods" => {
             let repos_file = config_dir.join("repos.json");
             let modules_dir = config_dir.join("modules");
             upgrade_modules(&repos_file, &modules_dir)
         }
         "all" | _ => {
-            let aktools_result = upgrade_aktools();
+            let anvil_result = upgrade_anvil();
             let repos_file = config_dir.join("repos.json");
             let modules_dir = config_dir.join("modules");
             let mod_result = upgrade_modules(&repos_file, &modules_dir);
 
-            if aktools_result == 2 && mod_result == 2 {
+            if anvil_result == 2 && mod_result == 2 {
                 0
             } else {
-                aktools_result.max(mod_result)
+                anvil_result.max(mod_result)
             }
         }
     }
 }
 
-fn upgrade_aktools() -> i32 {
-    println!("Checking for AKTools updates...\n");
+fn upgrade_anvil() -> i32 {
+    println!("Checking for Anvil updates...\n");
 
-    let current_version = get_installed_aktools_version().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    let current_version = get_installed_anvil_version().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
 
-    let latest_version = match ureq::get("https://api.github.com/repos/Akinus21/aktools/releases/latest")
+    let latest_version = match ureq::get("https://api.github.com/repos/Akinus21/anvil/releases/latest")
         .set("Accept", "application/vnd.github+json")
         .set("X-GitHub-Api-Version", "2022-11-28")
         .call()
@@ -88,7 +88,7 @@ fn upgrade_aktools() -> i32 {
     };
 
     if current_version == latest_version {
-        println!("AKTools is up-to-date! (v{})", current_version);
+        println!("Anvil is up-to-date! (v{})", current_version);
         return 2;
     }
 
@@ -111,31 +111,31 @@ fn upgrade_aktools() -> i32 {
     }
 
     let upgrade_result = std::process::Command::new("brew")
-        .args(["upgrade", "aktools"])
+        .args(["upgrade", "anvil"])
         .output();
 
     match upgrade_result {
         Ok(output) => {
             if output.status.success() {
-                println!("AKTools upgraded successfully!");
+                println!("Anvil upgraded successfully!");
                 println!("{}", String::from_utf8_lossy(&output.stdout));
                 0
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 if stderr.contains("Not a keyword") || stderr.contains("Cask") {
-                    println!("AKTools is a cask. Trying 'brew upgrade --cask aktools'...");
+                    println!("Anvil is a cask. Trying 'brew upgrade --cask anvil'...");
                     if let Ok(cask_output) = std::process::Command::new("brew")
-                        .args(["upgrade", "--cask", "aktools"])
+                        .args(["upgrade", "--cask", "anvil"])
                         .output()
                     {
                         if cask_output.status.success() {
-                            println!("AKTools upgraded successfully!");
+                            println!("Anvil upgraded successfully!");
                             println!("{}", String::from_utf8_lossy(&cask_output.stdout));
                             return 0;
                         }
                     }
                 }
-                eprintln!("Warning: 'brew upgrade aktools' may have failed:");
+                eprintln!("Warning: 'brew upgrade anvil' may have failed:");
                 eprintln!("{}", stderr);
                 1
             }
@@ -147,9 +147,9 @@ fn upgrade_aktools() -> i32 {
     }
 }
 
-fn get_installed_aktools_version() -> Option<String> {
+fn get_installed_anvil_version() -> Option<String> {
     let output = std::process::Command::new("brew")
-        .args(["info", "--json", "aktools"])
+        .args(["info", "--json", "anvil"])
         .output()
         .ok()?;
 
@@ -178,9 +178,9 @@ fn get_installed_aktools_version() -> Option<String> {
         .ok()?;
 
     let cellar = String::from_utf8_lossy(&cellar_path.stdout).trim().to_string();
-    let aktools_cellar = format!("{}/Cellar/aktools", cellar);
+    let anvil_cellar = format!("{}/Cellar/anvil", cellar);
 
-    if let Ok(entries) = fs::read_dir(&aktools_cellar) {
+    if let Ok(entries) = fs::read_dir(&anvil_cellar) {
         if let Some(entry) = entries.filter_map(|e| e.ok()).max_by(|a, b| {
             a.file_name().to_string_lossy().cmp(&b.file_name().to_string_lossy())
         }) {

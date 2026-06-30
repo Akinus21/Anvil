@@ -1,8 +1,8 @@
-# AKTools
+# Anvil
 
 **Modular CLI Tool Runner** — Turn any script into a polished CLI command.
 
-AKTools lets you package scripts as modules with custom aliases, multiple entry points, and centralized management. No more hunting for that one-off script buried in your dotfiles.
+Anvil lets you package scripts as modules with custom aliases, multiple entry points, and centralized management. No more hunting for that one-off script buried in your dotfiles.
 
 ## Features
 
@@ -19,59 +19,59 @@ AKTools lets you package scripts as modules with custom aliases, multiple entry 
 
 ```bash
 brew tap Akinus21/homebrew-tap
-brew install aktools
+brew install anvil
 ```
 
 After installation, add to your shell config (`~/.bashrc` or `~/.zshrc`):
 
 ```bash
-export AKTOOLS_HOME="$HOME/.aktools"
+export AKTOOLS_HOME="$HOME/.anvil"
 export PATH="$AKTOOLS_HOME/bin:$PATH"
 ```
 
-Then run `aktools doctor` to set everything up.
+Then run `anvil doctor` to set everything up.
 
 ## Quick Start
 
 ### Create a command module interactively
 
 ```bash
-aktools build-command
+anvil build-command
 # Follow the prompts to create a module with custom flags and commands
 ```
 
 ### Add a script as a module
 
 ```bash
-aktools add myscript.sh
+anvil add myscript.sh
 # Follow the prompts for name and aliases
 ```
 
 ### Run a module
 
 ```bash
-aktools <module-name> [args...]
+anvil <module-name> [args...]
 ```
 
 ### List installed modules
 
 ```bash
-aktools list
+anvil list
 ```
 
 ### Diagnose issues
 
 ```bash
-aktools doctor        # Auto-fix issues
-aktools doctor --no-fix  # Show issues without fixing
+anvil doctor        # Auto-fix issues
+anvil doctor --no-fix  # Show issues without fixing
 ```
 
 ## Module Structure
 
-Modules live in `~/.aktools/modules/`. Each module is a folder containing:
+Modules live in `~/.anvil/modules/`. Each module is a folder containing:
 
 ```
-~/.aktools/modules/
+~/.anvil/modules/
 └── mymodule/
     ├── manifest.xml
     └── script.sh
@@ -115,48 +115,48 @@ Modules can be command-only without an executable:
 </module>
 ```
 
-Run with `aktools sys upgrade`.
+Run with `anvil sys upgrade`.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `aktools build-command` | Create a new command module interactively |
-| `aktools add <file>` | Add a script as a new module |
-| `aktools edit [name]` | Edit a module's manifest |
-| `aktools edit-aliases` | Edit shell aliases interactively |
-| `aktools list` | List all installed modules |
-| `aktools rm <name>` | Remove a module |
-| `aktools update` | Rebuild the module registry |
-| `aktools doctor` | Diagnose and fix configuration issues |
-| `aktools completion <shell>` | Generate shell completions (bash/zsh/fish) |
-| `aktools add-repo <user/repo>` | Add a GitHub repo to track modules from |
-| `aktools list-repos` | List configured repos |
-| `aktools search-mods <term>` | Search for modules in repos |
-| `aktools install-mods <mod> [<mod>...]` | Install one or more modules from repos |
-| `aktools add-mod <module>` | Submit a module to the community repo |
-| `aktools autoupdate <sub>` | Manage automatic updates (status/enable/disable/set) |
-| `aktools help` | Show this help message |
+| `anvil build-command` | Create a new command module interactively |
+| `anvil add <file>` | Add a script as a new module |
+| `anvil edit [name]` | Edit a module's manifest |
+| `anvil edit-aliases` | Edit shell aliases interactively |
+| `anvil list` | List all installed modules |
+| `anvil rm <name>` | Remove a module |
+| `anvil update` | Rebuild the module registry |
+| `anvil doctor` | Diagnose and fix configuration issues |
+| `anvil completion <shell>` | Generate shell completions (bash/zsh/fish) |
+| `anvil add-repo <user/repo>` | Add a GitHub repo to track modules from |
+| `anvil list-repos` | List configured repos |
+| `anvil search-mods <term>` | Search for modules in repos |
+| `anvil install-mods <mod> [<mod>...]` | Install one or more modules from repos |
+| `anvil add-mod <module>` | Submit a module to the community repo |
+| `anvil autoupdate <sub>` | Manage automatic updates (status/enable/disable/set) |
+| `anvil help` | Show this help message |
 
 ## Configuration
 
-- **Config directory**: `~/.aktools/`
-- **Modules directory**: `~/.aktools/modules/`
-- **Registry file**: `~/.aktools/registry.json`
-- **Aliases file**: `~/.aktools/aliases.sh`
+- **Config directory**: `~/.anvil/`
+- **Modules directory**: `~/.anvil/modules/`
+- **Registry file**: `~/.anvil/registry.json`
+- **Aliases file**: `~/.anvil/aliases.sh`
 
 ## Updating
 
 ```bash
-brew upgrade aktools
+brew upgrade anvil
 ```
 
 Or enable automatic updates:
 
 ```bash
-aktools autoupdate status   # Check current status
-aktools autoupdate enable   # Enable daily updates
-aktools autoupdate set 12h # Update every 12 hours
+anvil autoupdate status   # Check current status
+anvil autoupdate enable   # Enable daily updates
+anvil autoupdate set 12h # Update every 12 hours
 ```
 
 Supports systemd, launchd (macOS), and cron.
@@ -167,13 +167,13 @@ Enable tab completion for your shell:
 
 ```bash
 # Bash
-aktools completion bash --install
+anvil completion bash --install
 
 # Zsh
-aktools completion zsh --install
+anvil completion zsh --install
 
 # Fish
-aktools completion fish --install
+anvil completion fish --install
 ```
 
 ## Community Modules
@@ -182,19 +182,19 @@ Install modules from GitHub repos:
 
 ```bash
 # Add a repo to track
-aktools add-repo username/my-plugins
+anvil add-repo username/my-plugins
 
 # List configured repos
-aktools list-repos
+anvil list-repos
 
 # Search for modules
-aktools search-mods mymodule
+anvil search-mods mymodule
 
 # Install one or more modules (space-separated)
-aktools install-mods mymodule anothermod yetanothermod
+anvil install-mods mymodule anothermod yetanothermod
 
 # Submit your module to the community repo
-aktools add-mod mymodule
+anvil add-mod mymodule
 ```
 
 This will:
@@ -203,9 +203,9 @@ This will:
 3. Update registry.json in the fork
 4. Create a pull request
 
-When you merge the PR, the module will be available to all aktools users via `aktools install-mods mymodule`.
+When you merge the PR, the module will be available to all anvil users via `anvil install-mods mymodule`.
 
-The default community repo is `Akinus21/aktools-modules` which is always available.
+The default community repo is `Akinus21/anvil-modules` which is always available.
 
 ## License
 

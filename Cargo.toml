@@ -1,10 +1,10 @@
 [package]
-name = "aktools"
+name = "anvil"
 version = "0.0.32"
 edition = "2021"
 description = "Modular CLI tool runner with module registry"
 authors = ["akinus"]
-homepage = "https://github.com/akinus/aktools"
+homepage = "https://github.com/Anvil/Anvil"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }

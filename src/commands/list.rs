@@ -6,7 +6,7 @@ pub fn execute(modules_dir: &Path) -> i32 {
         Ok(modules) => {
             if modules.is_empty() {
                 println!("No modules installed.");
-                println!("Run 'aktools add <filename>' to add a module.");
+                println!("Run 'anvil add <filename>' to add a module.");
                 0
             } else {
                 println!("Installed modules ({}):\n", modules.len());

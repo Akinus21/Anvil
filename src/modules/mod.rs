@@ -287,7 +287,7 @@ impl ModuleManager {
         let modules = Self::scan_modules(modules_dir)?;
         let mut content = String::new();
 
-        content.push_str("# aktools module aliases - auto-generated\n");
+        content.push_str("# anvil module aliases - auto-generated\n");
         content.push_str("# Do not edit manually\n\n");
 
         for (_, manifest) in &modules {
@@ -297,14 +297,14 @@ impl ModuleManager {
             for alias in &manifest.aliases {
                 if !manifest.executable.is_empty() {
                     content.push_str(&format!(
-                        "alias {}='aktools run {}'\n",
+                        "alias {}='anvil run {}'\n",
                         alias, manifest.name
                     ));
                 } else if let Some(opt) = manifest.options.first() {
                     if let Some(flag) = opt.flags.first() {
                         let clean_flag = flag.trim_start_matches('*');
                         content.push_str(&format!(
-                            "alias {}='aktools run {} {}'\n",
+                            "alias {}='anvil run {} {}'\n",
                             alias, manifest.name, clean_flag
                         ));
                     }

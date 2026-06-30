@@ -24,7 +24,7 @@ pub fn execute(config_dir: &Path, modules_dir: &Path, registry_path: &Path, args
         Some(f) => f,
         None => {
             println!("Error: filename required");
-            println!("Usage: aktools add <filename> [-l|--link]");
+            println!("Usage: anvil add <filename> [-l|--link]");
             return 1;
         }
     };
@@ -103,7 +103,7 @@ pub fn execute(config_dir: &Path, modules_dir: &Path, registry_path: &Path, args
                 println!("Warning: failed to write aliases: {}", e);
             } else {
                 println!("\nAliases have been updated. Source them with:");
-                println!("  source ~/.aktools/aliases.sh");
+                println!("  source ~/.anvil/aliases.sh");
             }
 
             0

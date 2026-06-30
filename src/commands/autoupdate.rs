@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::fs;
 
-const AUTOUPDATE_SERVICE: &str = "com.aktools.autoupdate";
+const AUTOUPDATE_SERVICE: &str = "com.anvil.autoupdate";
 
 pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
     let subcommand = args.first().map(|s| s.as_str()).unwrap_or("status");
@@ -12,12 +12,12 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
         "status" => show_status(),
         "set" => set_schedule(&args[1..]),
         _ => {
-            println!("Usage: aktools autoupdate <subcommand>");
+            println!("Usage: anvil autoupdate <subcommand>");
             println!("Subcommands:");
-            println!("  aktools autoupdate status    Show current autoupdate status");
-            println!("  aktools autoupdate enable    Enable automatic updates");
-            println!("  aktools autoupdate disable   Disable automatic updates");
-            println!("  aktools autoupdate set <time> Set update interval (e.g., 'daily', 'weekly', '12h', '6h')");
+            println!("  anvil autoupdate status    Show current autoupdate status");
+            println!("  anvil autoupdate enable    Enable automatic updates");
+            println!("  anvil autoupdate disable   Disable automatic updates");
+            println!("  anvil autoupdate set <time> Set update interval (e.g., 'daily', 'weekly', '12h', '6h')");
             1
         }
     }
@@ -61,7 +61,7 @@ fn show_status() -> i32 {
     match scheduler {
         "systemd" => {
             let result = std::process::Command::new("systemctl")
-                .args(["is-active", "--user", "aktools-updater.timer"])
+                .args(["is-active", "--user", "anvil-updater.timer"])
                 .output();
 
             if let Ok(output) = result {
@@ -72,7 +72,7 @@ fn show_status() -> i32 {
                         .output();
                     if let Ok(timer_output) = timer_result {
                         for line in String::from_utf8_lossy(&timer_output.stdout).lines() {
-                            if line.contains("aktools-updater") {
+                            if line.contains("anvil-updater") {
                                 println!("Timer: {}", line.trim());
                             }
                         }
@@ -86,7 +86,7 @@ fn show_status() -> i32 {
         }
         "launchd" => {
             let plist_path = dirs::home_dir()
-                .map(|h| h.join("Library/LaunchAgents/com.aktools.autoupdate.plist"))
+                .map(|h| h.join("Library/LaunchAgents/com.anvil.autoupdate.plist"))
                 .unwrap_or_default();
 
             if plist_path.exists() {
@@ -102,10 +102,10 @@ fn show_status() -> i32 {
 
             if let Ok(output) = result {
                 let crontab = String::from_utf8_lossy(&output.stdout);
-                if crontab.contains("aktools") {
+                if crontab.contains("anvil") {
                     println!("Status: Active");
                     for line in crontab.lines() {
-                        if line.contains("aktools") {
+                        if line.contains("anvil") {
                             println!("Entry: {}", line);
                         }
                     }
@@ -173,11 +173,11 @@ fn enable_autoupdate(_config_dir: &Path, args: &[String]) -> i32 {
 
 fn enable_systemd_timer(schedule: &str) -> i32 {
     let service_content = format!(r#"[Unit]
-Description=AKTools Auto Update
+Description=Anvil Auto Update
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'aktools upgrade'
+ExecStart=/bin/bash -c 'anvil upgrade'
 "#);
 
     let timer_content = if schedule.starts_with('@') {
@@ -189,7 +189,7 @@ ExecStart=/bin/bash -c 'aktools upgrade'
             _ => "daily",
         };
         format!(r#"[Unit]
-Description=AKTools Auto Update Timer
+Description=Anvil Auto Update Timer
 
 [Timer]
 OnCalendar={}
@@ -200,7 +200,7 @@ WantedBy=timers.target
 "#, timer_spec)
     } else {
         format!(r#"[Unit]
-Description=AKTools Auto Update Timer
+Description=Anvil Auto Update Timer
 
 [Timer]
 OnCalendar={}
@@ -219,8 +219,8 @@ WantedBy=timers.target
         return 1;
     }
 
-    let service_path = config_dir.join("aktools-updater.service");
-    let timer_path = config_dir.join("aktools-updater.timer");
+    let service_path = config_dir.join("anvil-updater.service");
+    let timer_path = config_dir.join("anvil-updater.timer");
 
     if let Err(e) = fs::write(&service_path, service_content) {
         println!("Error writing service file: {}", e);
@@ -237,18 +237,18 @@ WantedBy=timers.target
         .output();
 
     let _ = std::process::Command::new("systemctl")
-        .args(["--user", "enable", "aktools-updater.timer"])
+        .args(["--user", "enable", "anvil-updater.timer"])
         .output();
 
     let result = std::process::Command::new("systemctl")
-        .args(["--user", "start", "aktools-updater.timer"])
+        .args(["--user", "start", "anvil-updater.timer"])
         .output();
 
     if result.map(|o| o.status.success()).unwrap_or(false) {
-        println!("Enabled! AKTools will update automatically.");
+        println!("Enabled! Anvil will update automatically.");
         0
     } else {
-        println!("Warning: Timer may not have started properly. Check with 'systemctl --user status aktools-updater.timer'");
+        println!("Warning: Timer may not have started properly. Check with 'systemctl --user status anvil-updater.timer'");
         1
     }
 }
@@ -256,7 +256,7 @@ WantedBy=timers.target
 fn enable_launchd_plist(schedule: &str) -> i32 {
     let home = dirs::home_dir().unwrap_or_default();
     let launch_agents = home.join("Library/LaunchAgents");
-    let plist_path = launch_agents.join("com.aktools.autoupdate.plist");
+    let plist_path = launch_agents.join("com.anvil.autoupdate.plist");
 
     if let Err(e) = fs::create_dir_all(&launch_agents) {
         println!("Error creating LaunchAgents directory: {}", e);
@@ -269,12 +269,12 @@ fn enable_launchd_plist(schedule: &str) -> i32 {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.aktools.autoupdate</string>
+    <string>com.anvil.autoupdate</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>aktools upgrade</string>
+        <string>anvil upgrade</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -304,12 +304,12 @@ fn enable_launchd_plist(schedule: &str) -> i32 {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.aktools.autoupdate</string>
+    <string>com.anvil.autoupdate</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>aktools upgrade</string>
+        <string>anvil upgrade</string>
     </array>
     <key>StartInterval</key>
     <integer>{}</integer>
@@ -330,7 +330,7 @@ fn enable_launchd_plist(schedule: &str) -> i32 {
         .output();
 
     if result.map(|o| o.status.success()).unwrap_or(false) {
-        println!("Enabled! AKTools will update automatically.");
+        println!("Enabled! Anvil will update automatically.");
         0
     } else {
         println!("Enabled! Log out/in or run 'launchctl load {}' to start.", plist_path.display());
@@ -349,7 +349,7 @@ fn enable_cron(schedule: &str) -> i32 {
         schedule.to_string()
     };
 
-    let update_cmd = "aktools upgrade";
+    let update_cmd = "anvil upgrade";
     let new_line = format!("{} {}", cron_entry, update_cmd);
 
     let current_crontab = std::process::Command::new("crontab")
@@ -359,7 +359,7 @@ fn enable_cron(schedule: &str) -> i32 {
         .unwrap_or_default();
 
     let mut lines: Vec<&str> = current_crontab.lines().collect();
-    lines.retain(|l| !l.contains("aktools"));
+    lines.retain(|l| !l.contains("anvil"));
 
     let new_crontab = if lines.is_empty() {
         new_line
@@ -375,7 +375,7 @@ fn enable_cron(schedule: &str) -> i32 {
         .output();
 
     if result.map(|o| o.status.success()).unwrap_or(false) {
-        println!("Enabled! AKTools will update automatically with schedule: {}", cron_entry);
+        println!("Enabled! Anvil will update automatically with schedule: {}", cron_entry);
         0
     } else {
         println!("Error: Failed to install crontab entry");
@@ -389,15 +389,15 @@ fn disable_autoupdate() -> i32 {
     match scheduler {
         "systemd" => {
             let _ = std::process::Command::new("systemctl")
-                .args(["--user", "stop", "aktools-updater.timer"])
+                .args(["--user", "stop", "anvil-updater.timer"])
                 .output();
             let _ = std::process::Command::new("systemctl")
-                .args(["--user", "disable", "aktools-updater.timer"])
+                .args(["--user", "disable", "anvil-updater.timer"])
                 .output();
 
             let home = dirs::home_dir().unwrap_or_default();
-            let service_path = home.join(".config/systemd/user/aktools-updater.service");
-            let timer_path = home.join(".config/systemd/user/aktools-updater.timer");
+            let service_path = home.join(".config/systemd/user/anvil-updater.service");
+            let timer_path = home.join(".config/systemd/user/anvil-updater.timer");
 
             let _ = fs::remove_file(service_path);
             let _ = fs::remove_file(timer_path);
@@ -406,7 +406,7 @@ fn disable_autoupdate() -> i32 {
         }
         "launchd" => {
             let plist_path = dirs::home_dir()
-                .map(|h| h.join("Library/LaunchAgents/com.aktools.autoupdate.plist"))
+                .map(|h| h.join("Library/LaunchAgents/com.anvil.autoupdate.plist"))
                 .unwrap_or_default();
 
             let _ = std::process::Command::new("launchctl")
@@ -424,7 +424,7 @@ fn disable_autoupdate() -> i32 {
                 .unwrap_or_default();
 
             let lines: Vec<&str> = current_crontab.lines()
-                .filter(|l| !l.contains("aktools"))
+                .filter(|l| !l.contains("anvil"))
                 .collect();
 
             if lines.is_empty() {
@@ -450,7 +450,7 @@ fn disable_autoupdate() -> i32 {
 
 fn set_schedule(args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools autoupdate set <interval>");
+        println!("Usage: anvil autoupdate set <interval>");
         println!("Intervals: hourly, daily, weekly, 12h, 6h, 3h, 1h");
         return 1;
     }

@@ -1,8 +1,8 @@
-# AKTools Rust Refactor - Agent Instructions
+# Anvil Rust Refactor - Agent Instructions
 
 ## Overview
 
-This is the Rust rewrite of AKTools - a modular CLI tool runner.
+This is the Rust rewrite of Anvil - a modular CLI tool runner.
 
 ## Building
 
@@ -18,7 +18,7 @@ If you need to verify code changes without building:
 Since gh CLI is not authenticated, use SSH directly:
 
 ```bash
-cd /home/opencode/projects/aktools
+cd /home/opencode/projects/anvil
 git add -A
 git commit -m "<description>"
 GIT_SSH_COMMAND="ssh -i /config/.ssh/github -o StrictHostKeyChecking=no" git push origin main
@@ -39,7 +39,7 @@ The README should reflect:
 ## Project Structure
 
 ```
-aktools/
+anvil/
 ├── Cargo.toml
 ├── README.md
 ├── AGENTS.md
@@ -63,7 +63,7 @@ aktools/
 
 ## Module Structure
 
-Modules are stored in `~/.aktools/modules/`:
+Modules are stored in `~/.anvil/modules/`:
 - Each module is a folder
 - Contains `manifest.xml` with metadata
 - May contain scripts or resources
