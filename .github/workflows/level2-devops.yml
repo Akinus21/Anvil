@@ -42,6 +42,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -115,6 +116,7 @@ jobs:
 
       - name: AI-fix loop (3 attempts)
         if: steps.build.outcome == 'failure'
+        shell: bash
         run: |
           set -uo pipefail
           for iter in 1 2 3; do
@@ -200,6 +202,7 @@ jobs:
           FORGEJO_TOKEN: ${{ github.token }}
           HEAD: ${{ env.DEVOPS_BRANCH }}
           BASE: ${{ env.MAIN_BRANCH }}
+        shell: bash
         run: |
           set -euo pipefail
           EXISTING=$(curl -s \
@@ -245,6 +248,7 @@ jobs:
 
       - name: Capture commit messages on this branch
         id: scan
+        shell: bash
         run: |
           set -euo pipefail
           git log "$MAIN_BRANCH..HEAD" --pretty=%B > /tmp/commits.txt || true
@@ -265,6 +269,7 @@ jobs:
           ISSUE_BRANCH_PREFIX: ${{ vars.ISSUE_BRANCH_PREFIX || 'issue-' }}
           MAIN_BRANCH: ${{ vars.MAIN_BRANCH || 'main' }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
+        shell: bash
         run: |
           set -euo pipefail
           if [ -z "${GITHUB_SERVER_URL:-}" ]; then

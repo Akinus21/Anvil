@@ -56,6 +56,7 @@ jobs:
       relevant: ${{ steps.check.outputs.relevant }}
     steps:
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -70,6 +71,7 @@ jobs:
         id: check
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ github.event.issue.number }}"
@@ -107,6 +109,7 @@ jobs:
       reason: ${{ steps.parse.outputs.reason }}
     steps:
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -127,6 +130,7 @@ jobs:
       - name: Fetch issue comments
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           # curl -s exits 0 even on HTTP errors, so we add -f and a
@@ -146,6 +150,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
         run: |
           set -euo pipefail
           python3 - > /tmp/triage.md <<'PYEOF'
@@ -201,6 +206,7 @@ jobs:
           PYEOF
 
       - name: Run opencode triage
+        shell: bash
         run: |
           set -euo pipefail
           MODEL_ARG=""
@@ -234,6 +240,7 @@ jobs:
 
       - name: Parse triage result
         id: parse
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ github.event.issue.number }}"
@@ -278,6 +285,7 @@ jobs:
       - name: Acknowledge
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           jq -n '{body:"Thanks for reporting - a maintainer will investigate."}' > /tmp/c.json
@@ -296,6 +304,7 @@ jobs:
         env:
           FORGEJO_TOKEN: ${{ github.token }}
           REASON: ${{ needs.triage.outputs.reason }}
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -332,6 +341,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -341,6 +351,7 @@ jobs:
           [ -n "${{ github.token }}" ] || { echo "::error::github.token is empty"; exit 1; }
 
       - name: Create branch off devops
+        shell: bash
         run: |
           set -euo pipefail
           BRANCH="${{ needs.triage.outputs.branch_name }}"
@@ -358,6 +369,7 @@ jobs:
           # enhancement (implement) modes.
           ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           # curl -s exits 0 even on HTTP errors; add -fS + JSON check
@@ -450,6 +462,7 @@ jobs:
           PYEOF
 
       - name: Run opencode fix
+        shell: bash
         run: |
           set -euo pipefail
           MODEL_ARG=""
@@ -479,6 +492,7 @@ jobs:
 
       - name: Commit and push
         id: commit
+        shell: bash
         run: |
           set -euo pipefail
           BRANCH="${{ needs.triage.outputs.branch_name }}"
@@ -502,6 +516,7 @@ jobs:
         if: steps.commit.outputs.pushed != 'true'
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -517,6 +532,7 @@ jobs:
         if: steps.commit.outputs.pushed == 'true'
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -552,6 +568,7 @@ jobs:
           BRANCH: ${{ needs.triage.outputs.branch_name }}
           BASE:   ${{ env.DEVOPS_BRANCH }}
           ISSUE:  ${{ github.event.issue.number }}
+        shell: bash
         run: |
           set -euo pipefail
           EXISTING=$(curl -s \
@@ -594,6 +611,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -667,6 +685,7 @@ jobs:
 
       - name: AI-fix loop (3 attempts)
         if: steps.build.outcome == 'failure'
+        shell: bash
         run: |
           set -uo pipefail
           for iter in 1 2 3; do
@@ -752,6 +771,7 @@ jobs:
           FORGEJO_TOKEN: ${{ github.token }}
           HEAD: ${{ github.ref_name }}
           BASE: ${{ env.DEVOPS_BRANCH }}
+        shell: bash
         run: |
           set -euo pipefail
           # github.ref_name = "issue-N" (strip refs/heads/)
