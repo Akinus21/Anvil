@@ -2,27 +2,27 @@ use std::path::Path;
 use crate::modules::ModuleManager;
 use crate::registry::Registry;
 
-/// Display general help for AKTools
+/// Display general help for Anvil
 pub fn show_general_help() {
-    println!("AKTools - Modular CLI tool runner\n");
+    println!("Anvil - Modular CLI tool runner\n");
     println!("Commands:");
-    println!("  aktools build-command   Create a new command module interactively");
-    println!("  aktools add <file>     Add a script as a module");
-    println!("  aktools edit [name]    Edit a module's manifest");
-    println!("  aktools edit-aliases   Edit aliases interactively");
-    println!("  aktools list           List installed modules");
-    println!("  aktools rm <name>      Remove a module");
-    println!("  aktools update         Rebuild the registry");
-    println!("  aktools doctor         Diagnose and auto-fix issues");
-    println!("  aktools completion     Generate shell completions");
-    println!("  aktools add-repo       Add a GitHub repo to track");
-    println!("  aktools list-repos     List configured repos");
-    println!("  aktools search-mods    Search modules in repos");
-    println!("  aktools install-mods   Install modules from repos");
-    println!("  aktools add-mod        Submit module to community repo");
-    println!("  aktools autoupdate     Manage automatic updates");
-    println!("  aktools help <module>  Show help for a specific module");
-    println!("  aktools <module> [args...]  Run a module");
+    println!("  anvil build-command   Create a new command module interactively");
+    println!("  anvil add <file>     Add a script as a module");
+    println!("  anvil edit [name]    Edit a module's manifest");
+    println!("  anvil edit-aliases   Edit aliases interactively");
+    println!("  anvil list           List installed modules");
+    println!("  anvil rm <name>      Remove a module");
+    println!("  anvil update         Rebuild the registry");
+    println!("  anvil doctor         Diagnose and auto-fix issues");
+    println!("  anvil completion     Generate shell completions");
+    println!("  anvil add-repo       Add a GitHub repo to track");
+    println!("  anvil list-repos     List configured repos");
+    println!("  anvil search-mods    Search modules in repos");
+    println!("  anvil install-mods   Install modules from repos");
+    println!("  anvil add-mod        Submit module to community repo");
+    println!("  anvil autoupdate     Manage automatic updates");
+    println!("  anvil help <module>  Show help for a specific module");
+    println!("  anvil <module> [args...]  Run a module");
 }
 
 /// Display help for a specific module
@@ -52,7 +52,7 @@ pub fn show_module_help(
 
     println!("Description: {}", description);
 
-    println!("\nUsage: aktools run {} [options]", manifest.name);
+    println!("\nUsage: anvil run {} [options]", manifest.name);
 
     // Show aliases if available
     if !manifest.aliases.is_empty() && manifest.aliases.len() > 1 {
@@ -93,16 +93,16 @@ pub fn show_module_help(
     // Show examples based on module type
     println!("\nExamples:");
     if !manifest.executable.is_empty() {
-        println!("  aktools run {}          # Run with default script", manifest.name);
-        println!("  aktools run {} --help    # Show this help", manifest.name);
+        println!("  anvil run {}          # Run with default script", manifest.name);
+        println!("  anvil run {} --help    # Show this help", manifest.name);
     } else if !manifest.options.is_empty() {
         if let Some(first_opt) = manifest.options.first() {
             if let Some(first_flag) = first_opt.flags.first() {
                 let clean_flag = first_flag.trim_start_matches('*');
-                println!("  aktools run {} --{}    # Execute option", manifest.name, clean_flag);
+                println!("  anvil run {} --{}    # Execute option", manifest.name, clean_flag);
             }
         }
-        println!("  aktools help {}         # Show this help", manifest.name);
+        println!("  anvil help {}         # Show this help", manifest.name);
     } else {
         println!("  (no examples available)");
     }

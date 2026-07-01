@@ -16,7 +16,7 @@ pub fn execute(modules_dir: &Path, registry_path: &Path, module_name: &str, args
         Some(m) => m,
         None => {
             println!("Error: module '{}' not found", module_name);
-            println!("Run 'aktools list' to see available modules.");
+            println!("Run 'anvil list' to see available modules.");
             return 1;
         }
     };

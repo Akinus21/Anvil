@@ -101,11 +101,10 @@ pub fn get_modules_with_flags(modules_dir: &Path, registry_path: &Path) -> Strin
 fn generate_bash_completion() -> String {
     let commands = "run add edit rm list update doctor help build-command edit-aliases completion add-repo list-repos search-mods install-mods add-mod update-mod inspect-mod autoupdate upgrade";
     
-    format!(r#"# aktools bash completion
-# Note: For large module sets, cache completion data by adding a timestamp check
+    format!(r#"# anvil bash completion
 
-_aktools() {{
-    local cur prev prev2 opts
+_anvil() {{
+    local cur prev opts
     COMPREPLY=()
     cur="{{{{COMP_WORDS[COMP_CWORD]}}}}"
     prev="{{{{COMP_WORDS[COMP_CWORD-1]}}}}"
@@ -114,9 +113,7 @@ _aktools() {{
 
     # Get module data - each line is "module:flags" or "module:" for no flags
     local modules_data
-    modules_data=$(aktools _compdata 2>/dev/null || echo "")
-
-    # Extract module names (everything before the first colon on each line)
+    modules_data=$(anvil _compdata 2>/dev/null || echo "")
     local module_names
     module_names=$(echo "$modules_data" | cut -d':' -f1 | grep -v '^$' | sort | uniq)
 
@@ -125,7 +122,7 @@ _aktools() {{
             COMPREPLY=($(compgen -W "${{module_names}}" -- "${{cur}}"))
             ;;
         upgrade)
-            COMPREPLY=($(compgen -W "aktools modules all" -- "${{cur}}"))
+            COMPREPLY=($(compgen -W "anvil modules all" -- "${{cur}}"))
             ;;
         *)
             # Check if previous word is a module name for flag completion
@@ -142,7 +139,7 @@ _aktools() {{
             ;;
     esac
 
-    # Handle flag completion after module name (e.g., "aktools run mymod <TAB>")
+    # Handle flag completion after module name (e.g., "anvil run mymod <TAB>")
     if [[ "${{prev2}}" == @(run|edit|rm|inspect-mod) ]] && [[ "${{prev}}" != -* ]]; then
         local mod_flags
         mod_flags=$(echo "$modules_data" | grep "^${{prev}}:" | cut -d':' -f2 | tr ',' ' ')
@@ -151,7 +148,7 @@ _aktools() {{
         fi
     fi
 }}
-complete -F _aktools aktools
+complete -F _anvil anvil
 "#)
 }
 
@@ -167,12 +164,11 @@ fn generate_zsh_completion() -> String {
         .map(|s| format!("'{}'", s))
         .collect::<Vec<_>>()
         .join(" ");
-    let upgrade_targets = "'aktools' 'modules' 'all'";
+    let upgrade_targets = "'anvil' 'modules' 'all'";
 
-    format!(r#"# aktools zsh completion
-# Note: For large module sets, cache completion data by adding a timestamp check
+    format!(r#"# anvil zsh completion
 
-_aktools() {{
+_anvil() {{
     local -a commands modules upgrade_opts
     commands=({commands})
     upgrade_opts=({upgrade_targets})
@@ -184,7 +180,7 @@ _aktools() {{
 
     # Get module data - each line is "module:flags" or "module:" for no flags
     local modules_data
-    modules_data=$(aktools _compdata 2>/dev/null)
+    modules_data=$(anvil _compdata 2>/dev/null)
     local -a module_list
     # Extract module names (first field before colon)
     module_list=($(echo "$modules_data" | cut -d':' -f1 | grep -v '^$'))
@@ -211,91 +207,71 @@ _aktools() {{
     esac
 }}
 
-_aktools "$@"
+_anvil "$@"
 "#)
 }
 
 fn generate_fish_completion() -> String {
-    let script = r#"# aktools fish completion
-# Note: For large module sets, cache completion data by adding a timestamp check
+    let script = r#"# anvil fish completion
 
-function __aktools_modules
-    aktools _compdata 2>/dev/null | cut -d':' -f1 | grep -v '^$'
+function __anvil_modules
+    anvil _compdata 2>/dev/null | cut -d'|' -f1 | tr ' ' '\n' | grep -v '^$'
 end
 
-function __aktools_module_flags
+function __anvil_module_flags
     set -l module $argv[1]
-    aktools _compdata 2>/dev/null | grep "^$module:" | cut -d':' -f2 | tr ',' '\n'
+    anvil _compdata 2>/dev/null | grep "^$module:" | cut -d':' -f2 | tr ',' '\n'
 end
 
 # Command completions
-complete -c aktools -f -a 'run' -d 'Run a module'
-complete -c aktools -f -a 'add' -d 'Add a module'
-complete -c aktools -f -a 'edit' -d 'Edit a module manifest'
-complete -c aktools -f -a 'rm' -d 'Remove a module'
-complete -c aktools -f -a 'list' -d 'List installed modules'
-complete -c aktools -f -a 'update' -d 'Rebuild the registry'
-complete -c aktools -f -a 'doctor' -d 'Diagnose issues'
-complete -c aktools -f -a 'help' -d 'Show help'
-complete -c aktools -f -a 'build-command' -d 'Create command module'
-complete -c aktools -f -a 'edit-aliases' -d 'Edit aliases'
-complete -c aktools -f -a 'completion' -d 'Generate shell completions'
-complete -c aktools -f -a 'add-repo' -d 'Add a repo'
-complete -c aktools -f -a 'list-repos' -d 'List repos'
-complete -c aktools -f -a 'search-mods' -d 'Search modules'
-complete -c aktools -f -a 'install-mods' -d 'Install modules'
-complete -c aktools -f -a 'add-mod' -d 'Submit module to repo'
-complete -c aktools -f -a 'update-mod' -d 'Update module in repo'
-complete -c aktools -f -a 'inspect-mod' -d 'Show module contents'
-complete -c aktools -f -a 'autoupdate' -d 'Manage autoupdate'
-complete -c aktools -f -a 'upgrade' -d 'Upgrade aktools/modules'
+complete -c anvil -f -a 'run' -d 'Run a module'
+complete -c anvil -f -a 'add' -d 'Add a module'
+complete -c anvil -f -a 'edit' -d 'Edit a module manifest'
+complete -c anvil -f -a 'rm' -d 'Remove a module'
+complete -c anvil -f -a 'list' -d 'List installed modules'
+complete -c anvil -f -a 'update' -d 'Rebuild the registry'
+complete -c anvil -f -a 'doctor' -d 'Diagnose issues'
+complete -c anvil -f -a 'help' -d 'Show help'
+complete -c anvil -f -a 'build-command' -d 'Create command module'
+complete -c anvil -f -a 'edit-aliases' -d 'Edit aliases'
+complete -c anvil -f -a 'completion' -d 'Generate shell completions'
+complete -c anvil -f -a 'add-repo' -d 'Add a repo'
+complete -c anvil -f -a 'list-repos' -d 'List repos'
+complete -c anvil -f -a 'search-mods' -d 'Search modules'
+complete -c anvil -f -a 'install-mods' -d 'Install modules'
+complete -c anvil -f -a 'add-mod' -d 'Submit module to repo'
+complete -c anvil -f -a 'update-mod' -d 'Update module in repo'
+complete -c anvil -f -a 'inspect-mod' -d 'Show module contents'
+complete -c anvil -f -a 'autoupdate' -d 'Manage autoupdate'
+complete -c anvil -f -a 'upgrade' -d 'Upgrade anvil/modules'
 
 # Module name completions for run, edit, rm, inspect-mod
-complete -c aktools -n '__fish_seen_subcommand_from run edit rm inspect-mod' -a '(__aktools_modules)' -d 'module'
+complete -c anvil -n '__fish_seen_subcommand_from run edit rm inspect-mod' -a '(__anvil_modules)' -d 'module'
 
 # Upgrade target completions
-complete -c aktools -n '__fish_seen_subcommand_from upgrade' -a 'aktools modules all' -d 'target'
+complete -c anvil -n '__fish_seen_subcommand_from upgrade' -a 'anvil modules all' -d 'target'
 
 # Flag completions - dynamic based on selected module
-complete -c aktools -n '__fish_seen_subcommand_from run edit rm' -f -a '(__aktools_module_flags (commandline -opc)[3])' -d 'flag'
+complete -c anvil -n '__fish_seen_subcommand_from run edit rm' -f -a '(__anvil_module_flags (commandline -opc)[3])' -d 'flag'
 "#;
     script.to_string()
 }
 
 fn generate_powershell_completion() -> String {
-    let script = r#"# aktools powershell completion
-# Note: For large module sets, cache completion data by adding a timestamp check
+    let script = r#"# anvil powershell completion
 
 $script:AktoolsCompData = $null
 
-function Get-AktoolsCompData {
-    if ($script:AktoolsCompData -eq $null) {
-        $script:AktoolsCompData = aktools _compdata 2>$null
-    }
-    return $script:AktoolsCompData
-}
-
-function Get-AktoolsModuleNames {
-    $data = Get-AktoolsCompData
-    if (-not $data) { return @() }
-    $names = @()
-    foreach ($line in $data -split "`n") {
-        if ($line -match '^([^:]+):') {
-            $names += $matches[1]
-        }
-    }
-    return $names | Sort-Object -Unique
+function Get-AktoolsModules {
+    $script:AktoolsModules = @(anvil _compdata 2>$null | ForEach-Object { ($_ -split '\|')[0] -split ' ' } | Where-Object { $_ })
 }
 
 function Get-AktoolsModuleFlags {
     param([string]$Module)
-    $data = Get-AktoolsCompData
-    if (-not $data) { return @() }
-    foreach ($line in $data -split "`n") {
-        if ($line -match "^$Module`:(.+)") {
-            $flags = $matches[1] -split ','
-            return $flags | Where-Object { $_ }
-        }
+    if (-not $script:AktoolsModules) { Get-AktoolsModules }
+    $line = anvil _compdata 2>$null | Where-Object { $_ -match "^$Module:" }
+    if ($line -match ':(.+)') {
+        return ($matches[1] -split ',').Trim()
     }
     return @()
 }
@@ -307,7 +283,7 @@ $validCommands = @('run', 'add', 'edit', 'rm', 'list', 'update', 'doctor', 'help
 
 $moduleCommands = @('run', 'edit', 'rm', 'inspect-mod')
 
-Register-ArgumentCompleter -CommandName aktools -ParameterName Command -ScriptBlock {
+Register-ArgumentCompleter -CommandName anvil -ParameterName Command -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
     $script:AktoolsCompData = $null  # Reset cache on each completion
     $wordToComplete | ForEach-Object { $_ } | ForEach-Object {
@@ -315,7 +291,7 @@ Register-ArgumentCompleter -CommandName aktools -ParameterName Command -ScriptBl
     }
 }
 
-Register-ArgumentCompleter -CommandName aktools -ParameterName ModuleName -ScriptBlock {
+Register-ArgumentCompleter -CommandName anvil -ParameterName ModuleName -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
     $script:AktoolsCompData = $null  # Reset cache on each completion
     $names = Get-AktoolsModuleNames
@@ -328,15 +304,31 @@ Register-ArgumentCompleter -CommandName aktools -ParameterName ModuleName -Scrip
 }
 
 fn generate_elvish_completion() -> String {
-    // Elvish completion requires proper edit:completion hook integration.
-    // The edit:completion:arg-completer[cmd] = @args { } API requires implementing
-    // a candidate function that returns completions based on command args.
-    // This is not yet implemented - elvish users can use the aktools help command
-    // or manually specify module names and flags.
-    let script = r#"# aktools elvish completion
-# NOT YET SUPPORTED - Elvish completion requires implementation of
-# edit:completion:arg-completer[aktools] using the edit:completion hook system.
-# See: https://elv.sh/ref/command.html#editcompletion
+    let script = r#"# anvil elvish completion
+
+use runtime
+
+set:& anvil-commands = [
+    run add edit rm list update doctor help build-command edit-aliases completion
+    add-repo list-repos search-mods install-mods add-mod update-mod inspect-mod
+    autoupdate upgrade
+]
+
+set:& anvil-module-commands = [run edit rm inspect-mod]
+
+fn get-anvil-modules {
+    anvil _compdata 2>/dev/null | splits '|' | get 0 | splits ' '
+}
+
+fn get-anvil-flags {|module|
+    anvil _compdata 2>/dev/null | grep $module | splits ':' | get 1 | splits ','
+}
+
+set:& comp-posthooks = [
+    $@module in $anvil-module-commands {
+        candidates [ (get-anvil-modules) ]
+    }
+]
 "#;
     script.to_string()
 }
@@ -355,22 +347,22 @@ mod tests {
     fn test_shell_scripts_are_valid() {
         // Verify all shell scripts compile/are valid
         let bash = generate_bash_completion();
-        assert!(bash.contains("_aktools()"));
-        assert!(bash.contains("complete -F _aktools aktools"));
+        assert!(bash.contains("_anvil()"));
+        assert!(bash.contains("complete -F _anvil anvil"));
 
         let zsh = generate_zsh_completion();
-        assert!(zsh.contains("_aktools()"));
-        assert!(zsh.contains("_aktools \"$@\""));
+        assert!(zsh.contains("_anvil()"));
+        assert!(zsh.contains("_anvil \"$@\""));
 
         let fish = generate_fish_completion();
-        assert!(fish.contains("complete -c aktools"));
-        assert!(fish.contains("__aktools_modules"));
+        assert!(fish.contains("complete -c anvil"));
+        assert!(fish.contains("__anvil_modules"));
 
         let ps = generate_powershell_completion();
         assert!(ps.contains("Register-ArgumentCompleter"));
 
         let elvish = generate_elvish_completion();
-        assert!(elvish.contains("NOT YET SUPPORTED"));
+        assert!(elvish.contains("anvil-commands"));
     }
 
     #[test]

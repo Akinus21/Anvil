@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
 
-const DEFAULT_COMMUNITY_REPO: &str = "Akinus21/aktools-modules";
+const DEFAULT_COMMUNITY_REPO: &str = "Akinus21/Anvil-modules";
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct RepoConfig {
@@ -32,7 +32,7 @@ struct RegistryModule {
     repository: Option<String>,
     description: Option<String>,
     tags: Option<Vec<String>>,
-    min_aktools_version: Option<String>,
+    min_anvil_version: Option<String>,
     last_updated: Option<String>,
 }
 
@@ -53,13 +53,13 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
         _ => {
             println!("Unknown subcommand: {}", subcommand);
             println!("Usage:");
-            println!("  aktools add-repo <user/repo>   Add a repo to track");
-            println!("  aktools list-repos             List configured repos");
-            println!("  aktools search-mods <term>     Search modules");
-            println!("  aktools install-mods <mod> [<mod>...]  Install module(s)");
-            println!("  aktools add-mod <module>       Submit module to community repo");
-            println!("  aktools update-mod <module>   Update module in a repo (owner only)");
-            println!("  aktools inspect-mod <module>  Show module contents");
+            println!("  anvil add-repo <user/repo>   Add a repo to track");
+            println!("  anvil list-repos             List configured repos");
+            println!("  anvil search-mods <term>     Search modules");
+            println!("  anvil install-mods <mod> [<mod>...]  Install module(s)");
+            println!("  anvil add-mod <module>       Submit module to community repo");
+            println!("  anvil update-mod <module>   Update module in a repo (owner only)");
+            println!("  anvil inspect-mod <module>  Show module contents");
             1
         }
     }
@@ -67,8 +67,8 @@ pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {
 
 fn add_repo(repos_file: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools add-repo <user/repo>");
-        println!("Example: aktools add-repo myname/my-plugins");
+        println!("Usage: anvil add-repo <user/repo>");
+        println!("Example: anvil add-repo myname/my-plugins");
         return 1;
     }
 
@@ -134,7 +134,7 @@ fn list_repos(repos_file: &Path) -> i32 {
 
 fn search_modules(repos_file: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools search-mods <term>");
+        println!("Usage: anvil search-mods <term>");
         return 1;
     }
 
@@ -203,7 +203,7 @@ fn search_modules(repos_file: &Path, args: &[String]) -> i32 {
 
 fn install_modules(repos_file: &Path, modules_dir: &Path, config_dir: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools install-mods <module> [<module>...]");
+        println!("Usage: anvil install-mods <module> [<module>...]");
         return 1;
     }
 
@@ -317,7 +317,7 @@ fn load_repos_config(repos_file: &Path) -> RepoConfig {
 
 fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools add-mod <module-name>");
+        println!("Usage: anvil add-mod <module-name>");
         println!("Submit a local module to the community repo for review.");
         println!("This will fork the repo, add your module, and create a pull request.");
         return 1;
@@ -338,7 +338,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
     let module_path = modules_dir.join(module_name);
 
     if !module_path.exists() {
-        println!("Error: Module '{}' not found in ~/.aktools/modules/", module_name);
+        println!("Error: Module '{}' not found in ~/.anvil/modules/", module_name);
         return 1;
     }
 
@@ -381,9 +381,9 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
 
     let repos_config = load_repos_config(repos_file);
 
-    let mut repos: Vec<(&str, &str)> = vec![("Akinus21", "aktools-modules")];
+    let mut repos: Vec<(&str, &str)> = vec![("Akinus21", "anvil-modules")];
     for repo in &repos_config.repos {
-        if repo.user != "Akinus21" || repo.repo != "aktools-modules" {
+        if repo.user != "Akinus21" || repo.repo != "anvil-modules" {
             repos.push((repo.user.as_str(), repo.repo.as_str()));
         }
     }
@@ -603,7 +603,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
         let sha = get_file_sha(&client, &file_path_api, &gh_token);
 
         let mut file_body = serde_json::json!({
-            "message": format!("Add {} file from aktools add-mod", relative_path),
+            "message": format!("Add {} file from anvil add-mod", relative_path),
             "content": encoded_content
         });
         if let Some(ref s) = sha {
@@ -670,7 +670,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
             "name": module_name,
             "version": "1.0.0",
             "author": if user_login.is_empty() { "unknown" } else { &user_login },
-            "description": format!("Module submitted via aktools add-mod"),
+            "description": format!("Module submitted via anvil add-mod"),
             "tags": []
         });
 
@@ -693,7 +693,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
             "name": module_name,
             "version": "1.0.0",
             "author": if user_login.is_empty() { "unknown" } else { &user_login },
-            "description": format!("Module submitted via aktools add-mod"),
+            "description": format!("Module submitted via anvil add-mod"),
             "tags": []
         });
 
@@ -742,7 +742,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
         "base": "main",
         "body": format!(
             "## Module: {}\n\n\
-            Submitted via `aktools add-mod {}`\n\n\
+            Submitted via `anvil add-mod {}`\n\n\
             ### manifest.xml\n\
             ```xml\n{}\n```",
             module_name, module_name, manifest_content
@@ -781,7 +781,7 @@ fn add_mod(repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[St
 
                 if err_body.contains("head") && err_body.contains("not found") {
                     eprintln!("\nNote: The fork may still be creating. Try again in a few seconds.");
-                    eprintln!("Or check your fork at: https://github.com/{}/aktools-modules", actual_fork_name.split('/').next().unwrap_or(""));
+                    eprintln!("Or check your fork at: https://github.com/{}/anvil-modules", actual_fork_name.split('/').next().unwrap_or(""));
                 }
                 1
             }
@@ -860,7 +860,7 @@ fn get_file_sha(client: &ureq::Agent, file_url: &str, token: &str) -> Option<Str
 
 fn inspect_module(modules_dir: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools inspect-mod <module-name>");
+        println!("Usage: anvil inspect-mod <module-name>");
         println!("Display contents of an installed module.");
         return 1;
     }
@@ -869,7 +869,7 @@ fn inspect_module(modules_dir: &Path, args: &[String]) -> i32 {
     let module_path = modules_dir.join(module_name);
 
     if !module_path.exists() {
-        println!("Error: Module '{}' not found in ~/.aktools/modules/", module_name);
+        println!("Error: Module '{}' not found in ~/.anvil/modules/", module_name);
         return 1;
     }
 
@@ -911,9 +911,9 @@ fn inspect_module(modules_dir: &Path, args: &[String]) -> i32 {
 
 fn update_mod(_repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: &[String]) -> i32 {
     if args.is_empty() {
-        println!("Usage: aktools update-mod <module-name> [user/repo]");
+        println!("Usage: anvil update-mod <module-name> [user/repo]");
         println!("Update a module you own in a repo.");
-        println!("If no repo specified, uses Akinus21/aktools-modules");
+        println!("If no repo specified, uses Akinus21/anvil-modules");
         return 1;
     }
 
@@ -922,12 +922,12 @@ fn update_mod(_repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: 
         let parts: Vec<&str> = args[1].split('/').collect();
         (parts[0].to_string(), parts[1].to_string())
     } else {
-        ("Akinus21".to_string(), "aktools-modules".to_string())
+        ("Akinus21".to_string(), "anvil-modules".to_string())
     };
 
     let module_path = modules_dir.join(module_name);
     if !module_path.exists() {
-        println!("Error: Module '{}' not found in ~/.aktools/modules/", module_name);
+        println!("Error: Module '{}' not found in ~/.anvil/modules/", module_name);
         return 1;
     }
 
@@ -1014,7 +1014,7 @@ fn update_mod(_repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: 
 
     if !has_push_access {
         println!("Error: You don't have push access to {}/{}", repo_owner, repo_name);
-        println!("Update-mod is only for repo owners. Use 'aktools add-mod' to submit a PR.");
+        println!("Update-mod is only for repo owners. Use 'anvil add-mod' to submit a PR.");
         return 1;
     }
 
@@ -1043,7 +1043,7 @@ fn update_mod(_repos_file: &Path, modules_dir: &Path, _config_dir: &Path, args: 
         let sha = get_file_sha(&client, &file_path_api, &gh_token);
 
         let mut file_body = serde_json::json!({
-            "message": format!("Update {} file via aktools update-mod", relative_path),
+            "message": format!("Update {} file via anvil update-mod", relative_path),
             "content": encoded_content
         });
         if let Some(ref s) = sha {

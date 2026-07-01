@@ -51,23 +51,23 @@ jobs:
 
       - name: Setup Rust
         if: hashFiles('Cargo.toml') != ''
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: hashFiles('go.mod') != ''
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: hashFiles('package.json') != ''
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: hashFiles('pyproject.toml') != '' || hashFiles('setup.py') != ''
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 

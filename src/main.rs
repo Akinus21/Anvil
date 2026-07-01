@@ -10,7 +10,7 @@ use commands::{add, build_command, completions, edit, edit_aliases, list, rm, up
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser, Debug)]
-#[command(name = "aktools", about = "Modular CLI tool runner", version = VERSION)]
+#[command(name = "anvil", about = "Modular CLI tool runner", version = VERSION)]
 struct Args {
     #[arg(short, long, help = "Print debug info")]
     debug: bool,
@@ -24,13 +24,13 @@ fn get_config_dir() -> PathBuf {
     if let Ok(sudo_user) = std::env::var("SUDO_USER") {
         if let Ok(home) = std::env::var("HOME") {
             if home.contains(&sudo_user) || home == format!("/var/home/{}", sudo_user) || home == format!("/home/{}", sudo_user) {
-                return PathBuf::from(&home).join(".aktools");
+                return PathBuf::from(&home).join(".anvil");
             }
         }
     }
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".aktools")
+        .join(".anvil")
 }
 
 fn get_modules_dir() -> PathBuf {
@@ -42,7 +42,7 @@ fn get_registry_path() -> PathBuf {
 }
 
 fn get_log_path() -> PathBuf {
-    get_config_dir().join("aktools.log")
+    get_config_dir().join("anvil.log")
 }
 
 fn main() {
@@ -88,7 +88,7 @@ fn main() {
         Some("add-mod") => repos::execute(&config_dir, vec!["add-mod".to_string()].into_iter().chain(args.args.clone()).collect()),
         Some("update-mod") => repos::execute(&config_dir, vec!["update-mod".to_string()].into_iter().chain(args.args.clone()).collect()),
         Some("autoupdate") => autoupdate::execute(&config_dir, args.args.clone()),
-        Some("upgrade") | Some("self-upgrade") | Some("upgrade-aktools") | Some("selfupgrade") => upgrade::execute(&config_dir, args.args.clone()),
+        Some("upgrade") | Some("self-upgrade") | Some("upgrade-anvil") | Some("selfupgrade") => upgrade::execute(&config_dir, args.args.clone()),
         Some("build-command") => build_command::execute(&modules_dir, &registry_path),
         Some("rm") => rm::execute(&modules_dir, &registry_path, args.args.first().cloned()),
         Some("update") => update::execute(&modules_dir, &registry_path),
@@ -100,7 +100,7 @@ fn main() {
         Some("help") => help_cmd::execute(&modules_dir, &registry_path, &args.args),
         Some(module_name) => run::execute(&modules_dir, &registry_path, module_name, args.args),
         None => {
-            println!("AKTools - Modular CLI tool runner\n");
+            println!("Anvil - Modular CLI tool runner\n");
             println!("Commands:");
             println!("  add      Add a script as a module");
             println!("  edit     Edit a module's manifest");
@@ -108,7 +108,7 @@ fn main() {
             println!("  rm       Remove a module");
             println!("  update   Rebuild the registry");
             println!("  doctor   Diagnose and auto-fix issues\n");
-            println!("Run 'aktools <module> [args]' to execute a module.");
+            println!("Run 'anvil <module> [args]' to execute a module.");
             0
         }
     };

@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 pub fn execute(modules_dir: &Path, registry_path: &Path) -> i32 {
-    println!("AKTools - Build Command Module\n");
+    println!("Anvil - Build Command Module\n");
     println!("Press 'q' at any prompt to cancel.\n");
 
     print!("Module name: ");

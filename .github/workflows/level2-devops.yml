@@ -24,7 +24,6 @@ env:
   DEVOPS_BRANCH:         ${{ vars.DEVOPS_BRANCH || 'devops' }}
   MAIN_BRANCH:           ${{ vars.MAIN_BRANCH || 'main' }}
   OPENCODE_MODEL:        ${{ vars.OPENCODE_MODEL || '' }}
-  CONTAINER_IMAGE:     ${{ vars.CONTAINER_IMAGE || '' }}
   GITHUB_SERVER_URL:     ${{ github.server_url }}
   GITHUB_REPOSITORY:     ${{ github.repository }}
 
@@ -34,8 +33,8 @@ concurrency:
 
 jobs:
   build-iterate:
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +42,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -53,23 +53,23 @@ jobs:
 
       - name: Setup Rust
         if: hashFiles('Cargo.toml') != ''
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: hashFiles('go.mod') != ''
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: hashFiles('package.json') != ''
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: hashFiles('pyproject.toml') != '' || hashFiles('setup.py') != ''
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -116,6 +116,7 @@ jobs:
 
       - name: AI-fix loop (3 attempts)
         if: steps.build.outcome == 'failure'
+        shell: bash
         run: |
           set -uo pipefail
           for iter in 1 2 3; do
@@ -193,14 +194,15 @@ jobs:
   create-pr:
     needs: build-iterate
     if: needs.build-iterate.result == 'success'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - name: Open PR devops -> main
         env:
           FORGEJO_TOKEN: ${{ github.token }}
           HEAD: ${{ env.DEVOPS_BRANCH }}
           BASE: ${{ env.MAIN_BRANCH }}
+        shell: bash
         run: |
           set -euo pipefail
           EXISTING=$(curl -s \
@@ -236,8 +238,8 @@ jobs:
   close-merged-issue:
     needs: create-pr
     if: needs.create-pr.result == 'success'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -246,6 +248,7 @@ jobs:
 
       - name: Capture commit messages on this branch
         id: scan
+        shell: bash
         run: |
           set -euo pipefail
           git log "$MAIN_BRANCH..HEAD" --pretty=%B > /tmp/commits.txt || true
@@ -266,6 +269,7 @@ jobs:
           ISSUE_BRANCH_PREFIX: ${{ vars.ISSUE_BRANCH_PREFIX || 'issue-' }}
           MAIN_BRANCH: ${{ vars.MAIN_BRANCH || 'main' }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
+        shell: bash
         run: |
           set -euo pipefail
           if [ -z "${GITHUB_SERVER_URL:-}" ]; then

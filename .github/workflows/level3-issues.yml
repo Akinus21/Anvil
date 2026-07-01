@@ -33,7 +33,6 @@ env:
   GITHUB_SERVER_URL:     ${{ github.server_url }}
   GITHUB_REPOSITORY:     ${{ github.repository }}
   OPENCODE_MODEL:        ${{ vars.OPENCODE_MODEL || '' }}
-  CONTAINER_IMAGE:     ${{ vars.CONTAINER_IMAGE || '' }}
 
 concurrency:
   # Group per-issue so label/comment/edit activity for the same issue
@@ -51,12 +50,13 @@ concurrency:
 jobs:
   label_check:
     if: github.event_name == 'issues'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       relevant: ${{ steps.check.outputs.relevant }}
     steps:
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -71,6 +71,7 @@ jobs:
         id: check
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ github.event.issue.number }}"
@@ -100,14 +101,15 @@ jobs:
   triage:
     needs: label_check
     if: github.event_name == 'issues' && needs.label_check.outputs.relevant == 'true'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       action: ${{ steps.parse.outputs.action }}
       branch_name: ${{ steps.parse.outputs.branch_name }}
       reason: ${{ steps.parse.outputs.reason }}
     steps:
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -128,6 +130,7 @@ jobs:
       - name: Fetch issue comments
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           # curl -s exits 0 even on HTTP errors, so we add -f and a
@@ -147,6 +150,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
         run: |
           set -euo pipefail
           python3 - > /tmp/triage.md <<'PYEOF'
@@ -202,6 +206,7 @@ jobs:
           PYEOF
 
       - name: Run opencode triage
+        shell: bash
         run: |
           set -euo pipefail
           MODEL_ARG=""
@@ -235,6 +240,7 @@ jobs:
 
       - name: Parse triage result
         id: parse
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ github.event.issue.number }}"
@@ -273,12 +279,13 @@ jobs:
   comment:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'comment'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - name: Acknowledge
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           jq -n '{body:"Thanks for reporting - a maintainer will investigate."}' > /tmp/c.json
@@ -290,13 +297,14 @@ jobs:
   skip-notify:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'skip'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - name: Post skip reason
         env:
           FORGEJO_TOKEN: ${{ github.token }}
           REASON: ${{ needs.triage.outputs.reason }}
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -324,8 +332,8 @@ jobs:
   create-fix-branch:
     needs: triage
     if: github.event_name == 'issues' && needs.triage.outputs.action == 'fix'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -333,6 +341,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -342,6 +351,7 @@ jobs:
           [ -n "${{ github.token }}" ] || { echo "::error::github.token is empty"; exit 1; }
 
       - name: Create branch off devops
+        shell: bash
         run: |
           set -euo pipefail
           BRANCH="${{ needs.triage.outputs.branch_name }}"
@@ -359,6 +369,7 @@ jobs:
           # enhancement (implement) modes.
           ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           # curl -s exits 0 even on HTTP errors; add -fS + JSON check
@@ -451,6 +462,7 @@ jobs:
           PYEOF
 
       - name: Run opencode fix
+        shell: bash
         run: |
           set -euo pipefail
           MODEL_ARG=""
@@ -480,6 +492,7 @@ jobs:
 
       - name: Commit and push
         id: commit
+        shell: bash
         run: |
           set -euo pipefail
           BRANCH="${{ needs.triage.outputs.branch_name }}"
@@ -503,6 +516,7 @@ jobs:
         if: steps.commit.outputs.pushed != 'true'
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -518,6 +532,7 @@ jobs:
         if: steps.commit.outputs.pushed == 'true'
         env:
           FORGEJO_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -553,6 +568,7 @@ jobs:
           BRANCH: ${{ needs.triage.outputs.branch_name }}
           BASE:   ${{ env.DEVOPS_BRANCH }}
           ISSUE:  ${{ github.event.issue.number }}
+        shell: bash
         run: |
           set -euo pipefail
           EXISTING=$(curl -s \
@@ -586,8 +602,8 @@ jobs:
 
   build-iterate:
     if: github.event_name == 'push'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -595,6 +611,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Preflight opencode and github.token
+        shell: bash
         run: |
           set -euo pipefail
           command -v opencode >/dev/null 2>&1 || {
@@ -605,23 +622,23 @@ jobs:
 
       - name: Setup Rust
         if: hashFiles('Cargo.toml') != ''
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: hashFiles('go.mod') != ''
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: hashFiles('package.json') != ''
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: hashFiles('pyproject.toml') != '' || hashFiles('setup.py') != ''
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -668,6 +685,7 @@ jobs:
 
       - name: AI-fix loop (3 attempts)
         if: steps.build.outcome == 'failure'
+        shell: bash
         run: |
           set -uo pipefail
           for iter in 1 2 3; do
@@ -745,14 +763,15 @@ jobs:
   create-pr:
     needs: build-iterate
     if: github.event_name == 'push' && needs.build-iterate.result == 'success'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - name: Open PR issue-N -> devops
         env:
           FORGEJO_TOKEN: ${{ github.token }}
           HEAD: ${{ github.ref_name }}
           BASE: ${{ env.DEVOPS_BRANCH }}
+        shell: bash
         run: |
           set -euo pipefail
           # github.ref_name = "issue-N" (strip refs/heads/)

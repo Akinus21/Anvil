@@ -35,7 +35,7 @@ fn print_aliases(aliases: &[(String, String)]) {
 pub fn execute(config_dir: &Path) -> i32 {
     let aliases_file = config_dir.join("aliases.sh");
 
-    println!("AKTools Alias Editor\n");
+    println!("Anvil Alias Editor\n");
 
     let mut current_aliases = if aliases_file.exists() {
         fs::read_to_string(&aliases_file).unwrap_or_default()
@@ -76,7 +76,7 @@ pub fn execute(config_dir: &Path) -> i32 {
                     continue;
                 }
 
-                print!("  Enter command [default: aktools]: ");
+                print!("  Enter command [default: anvil]: ");
                 io::stdout().flush().unwrap();
                 let mut alias_cmd = String::new();
                 if io::stdin().read_line(&mut alias_cmd).is_err() {
@@ -85,9 +85,9 @@ pub fn execute(config_dir: &Path) -> i32 {
                 }
                 let alias_cmd = alias_cmd.trim();
                 let alias_cmd = if alias_cmd.is_empty() {
-                    "aktools".to_string()
+                    "anvil".to_string()
                 } else {
-                    format!("aktools {}", alias_cmd)
+                    format!("anvil {}", alias_cmd)
                 };
 
                 let new_alias = format!("alias {}='{}'\n", alias_name, alias_cmd);

@@ -45,7 +45,6 @@ env:
   BREW_TAP_BRANCH:       ${{ vars.BREW_TAP_BRANCH || 'main' }}
   SOURCE_BIN_NAME:       ${{ vars.SOURCE_BIN_NAME || '' }}
   OPENCODE_MODEL:        ${{ vars.OPENCODE_MODEL || '' }}
-  CONTAINER_IMAGE:     ${{ vars.CONTAINER_IMAGE || '' }}
   GITHUB_SERVER_URL:     ${{ github.server_url }}
   GITHUB_REPOSITORY:     ${{ github.repository }}
 
@@ -60,8 +59,8 @@ jobs:
   # build/release commands through the same source of truth.
   # ============================================================
   detect:
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       language:    ${{ steps.det.outputs.language }}
       bin_name:    ${{ steps.det.outputs.bin_name }}
@@ -74,6 +73,7 @@ jobs:
 
       - name: Detect project metadata
         id: det
+        shell: bash
         run: |
           set -euo pipefail
           REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
@@ -148,8 +148,8 @@ jobs:
   build-iterate:
     needs: detect
     if: contains(github.event.head_commit.message, '[release-bot-skip]') == false
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -164,23 +164,23 @@ jobs:
 
       - name: Setup Rust
         if: needs.detect.outputs.language == 'rust'
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: needs.detect.outputs.language == 'go'
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: needs.detect.outputs.language == 'node'
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: needs.detect.outputs.language == 'python'
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -217,6 +217,7 @@ jobs:
 
       - name: AI-fix loop (3 attempts)
         if: steps.build.outcome == 'failure'
+        shell: bash
         run: |
           set -uo pipefail
           for iter in 1 2 3; do
@@ -302,8 +303,8 @@ jobs:
       needs.build-iterate.result == 'success' &&
       contains(github.event.head_commit.message, '[release-bot-skip]') == false &&
       needs.detect.outputs.language != 'other'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       version:    ${{ steps.bump.outputs.version }}
       asset_url:  ${{ steps.upload.outputs.asset_url }}
@@ -325,28 +326,29 @@ jobs:
 
       - name: Setup Rust
         if: needs.detect.outputs.language == 'rust'
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: needs.detect.outputs.language == 'go'
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: needs.detect.outputs.language == 'node'
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: needs.detect.outputs.language == 'python'
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Bump version
         id: bump
+        shell: bash
         run: |
           set -euo pipefail
           VF="${{ needs.detect.outputs.version_file }}"
@@ -383,6 +385,7 @@ jobs:
 
       - name: Commit the bump
         id: commit_bump
+        shell: bash
         run: |
           set -euo pipefail
           git config user.name  "$BOT_NAME"
@@ -407,6 +410,7 @@ jobs:
 
       - name: Generate release notes via opencode
         id: notes
+        shell: bash
         run: |
           set -euo pipefail
           PREV=$(git describe --tags --abbrev=0 2>/dev/null || true)
@@ -462,6 +466,7 @@ jobs:
           VERSION:      ${{ steps.bump.outputs.version }}
           BIN_NAME:     ${{ needs.detect.outputs.bin_name }}
           LANGUAGE:     ${{ needs.detect.outputs.language }}
+        shell: bash
         run: |
           set -euo pipefail
           TAG="v$VERSION"
@@ -589,8 +594,8 @@ jobs:
     if: |
       needs.release.result == 'success' &&
       contains('rust go', needs.detect.outputs.language)
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       x86_64_linux_sha: ${{ steps.bottle_x86.outputs.sha256 }}
       arm64_linux_sha:  ${{ steps.bottle_arm64.outputs.sha256 }}
@@ -601,18 +606,19 @@ jobs:
 
       - name: Setup Rust
         if: needs.detect.outputs.language == 'rust'
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-gnu
 
       - name: Setup Go
         if: needs.detect.outputs.language == 'go'
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Install cross toolchain (aarch64)
         if: needs.detect.outputs.language == 'rust'
+        shell: bash
         run: |
           set -euo pipefail
           # Drop sudo: the rust-ci job image is expected to run as root
@@ -628,6 +634,7 @@ jobs:
         env:
           BIN_NAME: ${{ needs.detect.outputs.bin_name }}
           VERSION:  ${{ needs.release.outputs.version }}
+        shell: bash
         run: |
           set -euo pipefail
           BIN="$BIN_NAME"
@@ -659,6 +666,7 @@ jobs:
           # var; CC_AR / CC is also useful for some crates' build scripts.
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_CC: aarch64-linux-gnu-gcc
+        shell: bash
         run: |
           set -euo pipefail
           BIN="$BIN_NAME"
@@ -685,6 +693,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
           TAG:     ${{ needs.release.outputs.tag }}
           BIN:     ${{ needs.detect.outputs.bin_name }}
+        shell: bash
         run: |
           set -euo pipefail
           BOT=/tmp/bottles/x86_64_linux
@@ -712,6 +721,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
           TAG:     ${{ needs.release.outputs.tag }}
           BIN:     ${{ needs.detect.outputs.bin_name }}
+        shell: bash
         run: |
           set -euo pipefail
           BOT=/tmp/bottles/arm64_linux
@@ -744,6 +754,7 @@ jobs:
           # sync (see 'Sync formula to external tap repo' below) and
           # may not have write permission on this repo.
           FORGEJO_TOKEN:     ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           for ARCH in x86_64_linux arm64_linux; do
@@ -788,8 +799,8 @@ jobs:
       needs.release.result == 'success' &&
       needs.bottles.result == 'success' &&
       vars.BREW_TAP_ENABLED == 'true'
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     outputs:
       rendered: ${{ steps.render.outputs.rendered }}
     steps:
@@ -806,6 +817,7 @@ jobs:
           git rebase origin/main
 
       - name: Fetch release asset for sha256
+        shell: bash
         run: |
           set -euo pipefail
           curl -sL "${{ needs.release.outputs.asset_url }}" -o /tmp/release_asset
@@ -822,6 +834,7 @@ jobs:
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           SRC_SHA:           ${{ steps.render.outputs.release_asset_sha }}
+        shell: bash
         run: |
           set -euo pipefail
           REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
@@ -882,6 +895,7 @@ jobs:
           VERSION:    ${{ needs.release.outputs.version }}
           BOT_NAME:   ${{ vars.BOT_NAME || 'devops-bot' }}
           BOT_EMAIL:  ${{ vars.BOT_EMAIL || 'devops-bot@akinus21.com' }}
+        shell: bash
         run: |
           set -euo pipefail
           REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
@@ -906,6 +920,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
         run: |
           set -uo pipefail  # NOT -e; we want to capture errors, not abort
           if [ -z "${TAP_REPO:-}" ]; then
@@ -956,8 +971,8 @@ jobs:
     if: |
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
       (needs.bottles.result == 'success' || needs.bottles.result == 'skipped')
-    runs-on: ${{ vars.RUNNER_LABEL || 'rust-ci' }}
-    container: ${{ vars.CONTAINER_IMAGE || '' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/akinus21/rust-ci:latest
     steps:
       - name: Delete orphaned issue branches + toggle stale labels
         env:
@@ -967,6 +982,7 @@ jobs:
           REPO: ${{ github.repository }}
           ISSUE_BRANCH_PREFIX: ${{ vars.ISSUE_BRANCH_PREFIX || 'issue-' }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
+        shell: bash
         run: |
           set -euo pipefail
           # Don't silently fall back to a placeholder URL; a wrong
