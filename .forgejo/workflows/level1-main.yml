@@ -161,23 +161,23 @@ jobs:
 
       - name: Setup Rust
         if: needs.detect.outputs.language == 'rust'
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: needs.detect.outputs.language == 'go'
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: needs.detect.outputs.language == 'node'
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: needs.detect.outputs.language == 'python'
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -321,23 +321,23 @@ jobs:
 
       - name: Setup Rust
         if: needs.detect.outputs.language == 'rust'
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Go
         if: needs.detect.outputs.language == 'go'
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
       - name: Setup Node
         if: needs.detect.outputs.language == 'node'
-        uses: https://github.com/actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
         if: needs.detect.outputs.language == 'python'
-        uses: https://github.com/actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -596,13 +596,13 @@ jobs:
 
       - name: Setup Rust
         if: needs.detect.outputs.language == 'rust'
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-gnu
 
       - name: Setup Go
         if: needs.detect.outputs.language == 'go'
-        uses: https://github.com/actions/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: stable
 
