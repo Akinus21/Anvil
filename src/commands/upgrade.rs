@@ -16,12 +16,14 @@ struct Repo {
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct RegistryJson {
     version: u32,
     modules: Vec<RegistryModule>,
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct RegistryModule {
     id: String,
     name: String,

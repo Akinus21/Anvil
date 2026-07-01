@@ -330,6 +330,7 @@ impl ModuleManager {
         })
     }
 
+    #[allow(dead_code)]
     pub fn generate_shell_script(module_path: &Path, commands: &[String]) -> std::io::Result<()> {
         let script_path = module_path.join("commands.sh");
         let mut content = String::from("#!/bin/bash\nset -e\n\n");

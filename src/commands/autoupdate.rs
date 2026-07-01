@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::fs;
 
+#[allow(dead_code)]
 const AUTOUPDATE_SERVICE: &str = "com.anvil.autoupdate";
 
 pub fn execute(config_dir: &Path, args: Vec<String>) -> i32 {

@@ -4,6 +4,7 @@ use crate::modules::ModuleManager;
 use crate::registry::Registry;
 
 /// Get all module names from the registry
+#[allow(dead_code)]
 pub fn get_module_names(registry_path: &Path) -> Vec<String> {
     let registry = Registry::load(registry_path).unwrap_or_default();
     let mut names: Vec<String> = registry.modules.keys().cloned().collect();
@@ -13,6 +14,7 @@ pub fn get_module_names(registry_path: &Path) -> Vec<String> {
 
 /// Get flags for a specific module as (flag, description) pairs
 /// The description is the first command if available, otherwise empty
+#[allow(dead_code)]
 pub fn get_module_flags(modules_dir: &Path, module_name: &str, registry_path: &Path) -> Vec<(String, String)> {
     let registry = match Registry::load(registry_path) {
         Ok(r) => r,

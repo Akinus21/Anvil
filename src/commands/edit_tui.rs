@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListDirection, ListItem, Paragraph},
     Terminal,
 };
 use crossterm::{
@@ -102,6 +102,7 @@ impl AppState {
     }
 
     /// Get display label for current field
+    #[allow(dead_code)]
     pub fn get_field_label(&self) -> String {
         match &self.selected_field {
             Field::Name => "Name".to_string(),
@@ -360,7 +361,7 @@ fn select_module_tui(modules: &std::collections::HashMap<String, ModuleManifest>
             
             let list = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("Modules"))
-                .start_corner(ratatui::layout::Corner::TopLeft);
+                .direction(ListDirection::TopToBottom);
             
             f.render_widget(list, Rect::new(area.x, area.y + 2, area.width, area.height.saturating_sub(4)));
             
